@@ -1,0 +1,7 @@
+# Pinned versions verified to work together on Windows with an NVIDIA GPU (2026-11-11).
+# av must stay < 15: faster-whisper 1.2.1 passes metadata_errors to av.open, which av 15+ removed.
+faster-whisper==1.2.1
+ctranslate2==4.9.0
+av==14.2.0
+nvidia-cublas-cu12==12.9.2.10
+nvidia-cudnn-cu12==9.28.1.4

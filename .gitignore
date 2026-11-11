@@ -1,0 +1,13 @@
+# Created by setup.cmd on each machine; bound to the folder path.
+/python/
+/venv/
+/models/
+__pycache__/
+
+# Terms dictionaries hold team- or company-specific names: they stay local. terms.txt goes
+# into the team package (make-package.cmd), *.local.txt nowhere.
+/terms.txt
+*.local.txt
+
+# Left by an interrupted transcription.
+*.partial
