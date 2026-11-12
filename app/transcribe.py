@@ -1,9 +1,9 @@
-"""Transcribe meeting recordings to readable text, optionally with a Claude summary.
+"""Transcribe meeting recordings to readable text, optionally with an AI check and summary.
 
 Usage:
-    transcribe.cmd <file> [<file> ...] [--language ru|multi] [--speakers [N]] [--summary] [--srt]
-                   [--out-dir DIR] [--cpu] [--force]
-    transcribe.cmd <file> --ask      asks for language, speakers and summary (drop-files-here.cmd)
+    app\\transcribe.cmd <file> [<file> ...] [--language ru|multi] [--speakers [N]] [--check]
+                        [--summary] [--ai claude|codex|local] [--srt] [--out-dir DIR] [--cpu] [--force]
+    app\\transcribe.cmd <file> --ask   asks the questions instead (what drop-files-here.cmd does)
 
 For each audio/video input it writes, into a subfolder named <name> next to the input, or into --out-dir:
     <name>.txt          full transcript in paragraphs, each starting with [hh:mm:ss] and, with

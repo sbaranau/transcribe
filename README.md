@@ -64,14 +64,16 @@ Optionally the same script is in the Explorer **Send To** menu (right-click a re
 To, "Расшифровать"). `setup.cmd` asks whether to add it; `send-to-menu.cmd add|remove|status`
 changes it later. Only the tool's own shortcut in the user's SendTo folder is touched.
 
-Or from a terminal:
+From a terminal, for options the questions do not cover or for many files without questions
+(`app\transcribe.cmd` is kept out of the top level, where people would take it for the main
+entry point):
 
 ```
-C:\bin\transcribe\transcribe.cmd "meeting.mp4" --language ru
-C:\bin\transcribe\transcribe.cmd "meeting.mp4" --language ru --speakers 3 --check --summary --srt
-C:\bin\transcribe\transcribe.cmd "meeting.mp4" --ask             (the questions, as when dragging)
-C:\bin\transcribe\transcribe.cmd "meeting.txt" --check --summary (check and summarize an existing transcript)
-C:\bin\transcribe\transcribe.cmd --help
+C:\bin\transcribe\app\transcribe.cmd "meeting.mp4" --language ru
+C:\bin\transcribe\app\transcribe.cmd "meeting.mp4" --language ru --speakers 3 --check --summary --srt
+C:\bin\transcribe\app\transcribe.cmd "meeting.mp4" --ask             (the questions, as when dragging)
+C:\bin\transcribe\app\transcribe.cmd "meeting.txt" --check --summary (check and summarize an existing transcript)
+C:\bin\transcribe\app\transcribe.cmd --help
 ```
 
 Options: `--language ru|de|en|...|multi` (default: detected from the first 30 seconds; `multi`
@@ -211,11 +213,11 @@ The top level holds only what people start or read; everything else is in `app\`
 | Path | Content |
 |---|---|
 | `drop-files-here.cmd` | drag-and-drop entry point with the questions |
-| `transcribe.cmd` | command-line entry point |
 | `setup.cmd` | installs `uv` with winget if missing; builds `app\python\`, `app\venv\` and `app\models\`, e.g. on another machine; asks about the Send To menu; moves an old top-level layout into `app\` |
 | `send-to-menu.cmd` | add or remove the Send To menu entry |
 | `ИНСТРУКЦИЯ.md`, `README.md` | user guide in Russian, this file |
 | `terms.txt` | your terms for Whisper (optional, not in git) |
+| `app\transcribe.cmd` | command-line entry point |
 | `app\transcribe.py` | the tool |
 | `app\ai_engines.py` | finding and calling the AI for the check and the summary |
 | `app\checker.py`, `app\check_prompt.md` | the text check: applying the AI's findings; the instructions it gets |
