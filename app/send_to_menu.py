@@ -3,7 +3,7 @@
 Usage (via send-to-menu.cmd):  send-to-menu.cmd add | remove | status
 
 Creates one shortcut, "Расшифровать", in the user's SendTo folder
-(%APPDATA%\\Microsoft\\Windows\\SendTo) that points to drop-files-here.cmd in this folder.
+(%APPDATA%\\Microsoft\\Windows\\SendTo) that points to drop-files-here.cmd in the tool folder.
 Nothing else is changed; "remove" deletes exactly the tool's shortcuts (also those of older
 versions). After moving the tool folder, run "add" again.
 """
@@ -12,7 +12,8 @@ import os
 import subprocess
 import sys
 
-TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
+# This file is in app\; the scripts people start are one level up.
+TOOL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Shortcut name (as shown in the menu) -> script in the tool folder.
 SHORTCUTS = {
     "Расшифровать": "drop-files-here.cmd",

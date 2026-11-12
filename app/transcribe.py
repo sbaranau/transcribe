@@ -24,7 +24,8 @@ overwrites them. The transcript is written to a .partial file first, so an inter
 leaves no incomplete <name>.txt behind.
 
 Terms (names, products, jargon) that Whisper should spell right are read, one per line, from
---terms FILE and from terms.txt in the tool folder (local, not in git). They are passed to Whisper as hotwords for every 30-second window.
+--terms FILE and from terms.txt in the tool folder, next to setup.cmd (local, not in git). They
+are passed to Whisper as hotwords for every 30-second window.
 """
 import argparse
 import bisect
@@ -37,11 +38,12 @@ import time
 
 import ai_engines
 
-TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
+TOOL_DIR = os.path.dirname(os.path.abspath(__file__))  # app\: code, prompts, models
+ROOT_DIR = os.path.dirname(TOOL_DIR)  # the folder people open: scripts, guides, terms.txt
 DEFAULT_MODEL = os.path.join(TOOL_DIR, "models", "large-v3-turbo")
 SUMMARY_PROMPT_FILE = os.path.join(TOOL_DIR, "summary_prompt.md")
 # Most specific first: when the list is too long, Whisper drops the terms at the end.
-DEFAULT_TERMS_FILES = [os.path.join(TOOL_DIR, "terms.txt")]
+DEFAULT_TERMS_FILES = [os.path.join(ROOT_DIR, "terms.txt")]
 # faster-whisper keeps at most max_length // 2 - 1 = 223 hotword tokens and silently drops the rest.
 HOTWORDS_TOKEN_LIMIT = 223
 

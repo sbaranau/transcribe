@@ -1,8 +1,12 @@
 # Created by setup.cmd on each machine; bound to the folder path.
+/app/python/
+/app/venv/
+/app/models/
+__pycache__/
+# Where versions before 2026-11-12 put them; setup.cmd moves them into app\.
 /python/
 /venv/
 /models/
-__pycache__/
 
 # The terms dictionary holds company and colleague names: it stays local.
 /terms.txt

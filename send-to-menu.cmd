@@ -7,7 +7,8 @@ setlocal
 set "PYTHONIOENCODING=utf-8"
 set "PYTHONUTF8=1"
 set "TOOL_DIR=%~dp0"
-set "PY=%TOOL_DIR%venv\Scripts\python.exe"
+set "APP=%~dp0app\"
+set "PY=%APP%venv\Scripts\python.exe"
 
 if not exist "%PY%" (
     echo The environment is missing. Run setup.cmd in %TOOL_DIR% first.
@@ -16,15 +17,15 @@ if not exist "%PY%" (
 chcp 65001 >nul
 if not "%~1"=="" goto run
 
-"%PY%" "%TOOL_DIR%send_to_menu.py" status
+"%PY%" "%APP%send_to_menu.py" status
 choice /c ARC /m "Add to the Send To menu, Remove from it, or Cancel"
 if errorlevel 3 exit /b 0
 if errorlevel 2 (set "ACTION=remove") else (set "ACTION=add")
-"%PY%" "%TOOL_DIR%send_to_menu.py" %ACTION%
+"%PY%" "%APP%send_to_menu.py" %ACTION%
 set "RC=%ERRORLEVEL%"
 pause
 exit /b %RC%
 
 :run
-"%PY%" "%TOOL_DIR%send_to_menu.py" %1
+"%PY%" "%APP%send_to_menu.py" %1
 exit /b %ERRORLEVEL%

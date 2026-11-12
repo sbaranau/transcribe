@@ -21,7 +21,7 @@ idea, task and date.
 
 Nothing is tied to one person's account. The transcript needs no account, and the models are
 downloaded without login. The summary uses the login of whoever runs the tool, with that
-person's own setup kept out (`ai_engines.py`): Claude Code with `--tools "" --strict-mcp-config
+person's own setup kept out (`app\ai_engines.py`): Claude Code with `--tools "" --strict-mcp-config
 --setting-sources project --no-session-persistence`, Codex with `--ignore-user-config
 --ignore-rules --ephemeral --sandbox read-only` in an empty folder; no session keeps the
 transcript.
@@ -37,10 +37,13 @@ C:\bin\transcribe\setup.cmd
 ```
 
 `setup.cmd` puts a private Python 3.12, the packages (with the NVIDIA CUDA libraries) and the
-models (`download_models.py`: Whisper and the voice separation models) into the folder, about
+models (`app\download_models.py`: Whisper and the voice separation models) into `app\`, about
 3 GB. Update with `git -C C:\bin\transcribe pull`, and run `setup.cmd` again when
-`requirements.txt` or the models changed; models already there are not downloaded again. The environment is bound to its folder path:
-after moving the folder, run `setup.cmd` again. A Russian guide is in `ИНСТРУКЦИЯ.md`.
+`app\requirements.txt` or the models changed; models already there are not downloaded again.
+The environment is bound to its folder path: after moving the folder, run `setup.cmd` again.
+Installs from before 2026-11-12 had `python\`, `venv\` and `models\` at the top level; after
+pulling, run `setup.cmd` once: it moves the models into `app\models` and rebuilds the rest there.
+A Russian guide is in `ИНСТРУКЦИЯ.md`.
 
 ## Usage
 
@@ -52,7 +55,7 @@ whether to make a summary, and with which of the AI tools found on the computer.
 
 If no AI is found, it offers to skip the summary (the transcript is made anyway) or to enter
 the path to `claude.exe` / `codex.cmd` (or their folder) or the address of a local model server.
-A working path is stored in `ai.local.ini` (not in git) and found again next time; delete the
+A working path is stored in `app\ai.local.ini` (not in git) and found again next time; delete the
 file to search afresh.
 
 Optionally the same script is in the Explorer **Send To** menu (right-click a recording, Send
@@ -77,13 +80,14 @@ found), `--srt`, `--terms FILE`, `--no-terms`, `--no-filter`, `--out-dir DIR`, `
 
 ## Summary AI
 
-`ai_engines.py` finds the AI tools (Claude Code and Codex on PATH or at a remembered path;
+`app\ai_engines.py` finds the AI tools (Claude Code and Codex on PATH or at a remembered path;
 local servers at a remembered address or the default ports 11434 for Ollama and 1234 for LM
 Studio) and calls them. Everything goes through stdin, so no transcript text passes a command
 line. Local models get the transcript at once if it is up to 20,000 characters; a longer one is
-cut into parts at paragraph ends, each part is turned into notes (`summary_notes_prompt.md`), and
-the summary is made from the notes. For Ollama the native API is used so the context window can
-be set (16,384 tokens); `ai.local.ini` `[local]` takes `model`, `chunk_chars` and `context`.
+cut into parts at paragraph ends, each part is turned into notes (`app\summary_notes_prompt.md`),
+and the summary is made from the notes. For Ollama the native API is used so the context window
+can be set (16,384 tokens); `app\ai.local.ini` `[local]` takes `model`, `chunk_chars` and
+`context`.
 Tested: Claude and ChatGPT (Codex CLI 0.167) on a synthetic meeting; the local path against
 fake Ollama- and LM Studio-style servers only.
 
@@ -142,8 +146,8 @@ dropped. The tool prints what it removed (`Filtered: ...`); `--no-filter` keeps 
 
 ## Terms
 
-Names and jargon Whisper should spell right go one per line into `terms.txt` next to
-`transcribe.py` (optional). It is not in git, so company product names and colleague names
+Names and jargon Whisper should spell right go one per line into `terms.txt` in the tool folder,
+next to `setup.cmd` (optional). It is not in git, so company product names and colleague names
 never reach the repository; to share it, send the file. `--terms FILE` adds a file for one
 meeting. The terms are passed to Whisper as `hotwords` for every 30-second window, `--terms`
 files first, then `terms.txt`. Whisper reads
@@ -171,7 +175,7 @@ For a `.txt` input, the summary is written next to that `.txt`.
   reference, relative ones kept as said), Open questions, Topics by time. Every bullet has a
   timestamp; empty sections are left out except the dates. Written entirely in the meeting's
   language, headings included, without introductions or repetition. Check it against the
-  transcript before passing it on. The prompt is in `summary_prompt.md`; the first line names
+  transcript before passing it on. The prompt is in `app\summary_prompt.md`; the first line names
   the AI that made it.
 
 Recognition makes mistakes with names and technical terms, and the speaker labels with
@@ -179,20 +183,24 @@ overlapping speech, similar voices and people who say very little.
 
 ## Folder layout
 
+The top level holds only what people start or read; everything else is in `app\`.
+
 | Path | Content |
 |---|---|
-| `transcribe.py` | the tool |
-| `ai_engines.py` | finding and calling the summary AI |
-| `summary_prompt.md` | the instructions the AI gets for the summary |
-| `summary_notes_prompt.md` | notes per part of a long transcript, for local models |
-| `ai.local.ini` | where the summary AI was found, if a path was entered (not in git) |
-| `terms.txt` | your terms for Whisper (optional, not in git) |
-| `requirements.txt` | pinned packages (`av` must stay below 15 for faster-whisper 1.2.1) |
-| `python\` | private Python 3.12 (installed by uv) |
-| `venv\` | virtual environment with the packages and the NVIDIA CUDA libraries |
-| `models\large-v3-turbo\` | the Whisper model, so it works offline |
-| `models\diarization\` | the voice separation models |
 | `drop-files-here.cmd` | drag-and-drop entry point with the questions |
-| `setup.cmd`, `download_models.py` | rebuild `python\`, `venv\` and `models\`, e.g. on another machine; need `uv`; setup asks about the Send To menu |
-| `send-to-menu.cmd`, `send_to_menu.py` | add or remove the Send To menu entry |
-| `ИНСТРУКЦИЯ.md` | user guide in Russian |
+| `transcribe.cmd` | command-line entry point |
+| `setup.cmd` | builds `app\python\`, `app\venv\` and `app\models\`, e.g. on another machine; needs `uv`; asks about the Send To menu; moves an old top-level layout into `app\` |
+| `send-to-menu.cmd` | add or remove the Send To menu entry |
+| `ИНСТРУКЦИЯ.md`, `README.md` | user guide in Russian, this file |
+| `terms.txt` | your terms for Whisper (optional, not in git) |
+| `app\transcribe.py` | the tool |
+| `app\ai_engines.py` | finding and calling the summary AI |
+| `app\summary_prompt.md` | the instructions the AI gets for the summary |
+| `app\summary_notes_prompt.md` | notes per part of a long transcript, for local models |
+| `app\download_models.py`, `app\send_to_menu.py` | model download, Send To shortcut |
+| `app\requirements.txt` | pinned packages (`av` must stay below 15 for faster-whisper 1.2.1) |
+| `app\ai.local.ini` | where the summary AI was found, if a path was entered (not in git) |
+| `app\python\` | private Python 3.12 (installed by uv) |
+| `app\venv\` | virtual environment with the packages and the NVIDIA CUDA libraries |
+| `app\models\large-v3-turbo\` | the Whisper model, so it works offline |
+| `app\models\diarization\` | the voice separation models |
