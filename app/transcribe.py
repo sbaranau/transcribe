@@ -24,7 +24,7 @@ overwrites them. The transcript is written to a .partial file first, so an inter
 leaves no incomplete <name>.txt behind.
 
 Terms (names, products, jargon) that Whisper should spell right are read, one per line, from
---terms FILE and from terms.txt in the tool folder, next to setup.cmd (local, not in git). They
+--terms FILE and from terms.txt in the tool folder, next to README.md (local, not in git). They
 are passed to Whisper as hotwords for every 30-second window.
 """
 import argparse
@@ -79,7 +79,7 @@ REPEATED_SEGMENT_MIN_WORDS = 3
 PARTIAL_SUFFIX = ".partial"
 MULTILINGUAL = "multi"
 
-# Voice separation (speaker diarization) with sherpa-onnx; models downloaded by setup.cmd.
+# Voice separation (speaker diarization) with sherpa-onnx; models downloaded by the setup.
 SAMPLE_RATE = 16000
 DIARIZATION_DIR = os.path.join(TOOL_DIR, "models", "diarization")
 SEGMENTATION_MODEL = os.path.join(DIARIZATION_DIR, "sherpa-onnx-pyannote-segmentation-3-0", "model.onnx")
@@ -123,12 +123,29 @@ SPEAKER_LABELS = {"ru": "Говорящий", "uk": "Мовець", "de": "Sprec
                   "it": "Parlante", "es": "Hablante"}
 
 
+# What to run when something installed by the setup is missing.
+SETUP_HINT = r"windows\setup.cmd" if os.name == "nt" else "linux/setup.sh"
+
+
 def add_cuda_dll_dirs() -> None:
-    """Make the pip-installed NVIDIA DLLs (cuBLAS, cuDNN) visible on Windows."""
+    """Make the pip-installed NVIDIA DLLs (cuBLAS, cuDNN) visible on Windows. On Linux,
+    linux/transcribe.sh puts their lib folders on LD_LIBRARY_PATH before Python starts."""
+    if os.name != "nt":
+        return
     nvidia_dir = os.path.join(sys.prefix, "Lib", "site-packages", "nvidia")
     for bin_dir in glob.glob(os.path.join(nvidia_dir, "*", "bin")):
         os.add_dll_directory(bin_dir)
         os.environ["PATH"] = bin_dir + os.pathsep + os.environ.get("PATH", "")
+
+
+def open_path(path: str) -> None:
+    """Opens a file or folder with the program the desktop has for it."""
+    if os.name == "nt":
+        os.startfile(path)
+    else:
+        import subprocess
+        opener = "open" if sys.platform == "darwin" else "xdg-open"
+        subprocess.Popen([opener, path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def format_clock(seconds: float) -> str:
@@ -746,7 +763,7 @@ def choose_ai(args, interactive: bool) -> bool:
                      "отменить", number_in(1, 2))
         if choice != 2:
             return False
-        print("Путь к claude.exe или codex.cmd (можно папку с ним), или адрес локального сервера,\n"
+        print("Путь к claude или codex (можно папку с ним), или адрес локального сервера,\n"
               "например http://127.0.0.1:11434:")
         try:
             entered = input("> ").lstrip("﻿")
@@ -860,7 +877,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Offline speech-to-text for meeting recordings.")
     parser.add_argument("--live", action="store_true",
                         help="transcribe a meeting while it happens, from the computer's sound and "
-                             "the microphone, in a window (live-transcribe.cmd)")
+                             "the microphone, in a window (live-transcribe)")
     parser.add_argument("--console", action="store_true",
                         help="with --live: no window, text in the console, Enter stops it")
     parser.add_argument("inputs", nargs="*",
@@ -868,7 +885,7 @@ def main(argv: list[str] | None = None) -> int:
                              "transcripts; without any, the tool asks for them")
     parser.add_argument("--ask", action="store_true",
                         help="ask in the console for language, speakers and summary (what is not "
-                             "given as an option); used by drop-files-here.cmd")
+                             "given as an option); used by drop-files-here")
     parser.add_argument("--language", default=None,
                         help="spoken language, e.g. ru, de, en, or 'multi' for several languages; "
                              "omit to auto-detect from the first 30s")
@@ -932,7 +949,7 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
     if args.speakers is not None and media and not (
             os.path.isfile(SEGMENTATION_MODEL) and os.path.isfile(EMBEDDING_MODEL)):
-        print("The voice separation models are missing. Run setup.cmd.", file=sys.stderr)
+        print(f"The voice separation models are missing. Run {SETUP_HINT}.", file=sys.stderr)
         return 3
     if transcripts and not (args.summary or args.check):
         print("A .txt input is only checked or summarized; add --check or --summary.", file=sys.stderr)

@@ -17,3 +17,6 @@ __pycache__/
 
 # Local settings: where the AI was found, the window's last language and microphone.
 *.local.ini
+
+# Shortcuts with icons, made by windows\setup.cmd (they hold absolute paths).
+/*.lnk

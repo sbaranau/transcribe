@@ -1,4 +1,4 @@
-"""The window of the live mode (live-transcribe.cmd).
+"""The window of the live mode (live-transcribe).
 
 1. Before: language, microphone and output devices, folder; the model loads meanwhile.
 2. During: recording light and timer, sound levels of the microphone and the computer, the text
@@ -19,7 +19,7 @@ import queue
 import threading
 import time
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import font as tkfont, messagebox, ttk
 
 import ai_engines
 import live
@@ -33,6 +33,10 @@ UI_SETTINGS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui.local
 PARAGRAPH_PAUSE = 2.0
 PARAGRAPH_LONGEST = 30.0
 GREY, RED, GREEN = "#6b6b6b", "#c62828", "#2e7d32"
+ICONS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons")
+# Segoe UI on Windows; on Linux the first of these the system has (set in run()).
+FONT = "Segoe UI"
+LINUX_FONTS = ["Ubuntu", "Noto Sans", "DejaVu Sans", "Liberation Sans"]
 SEARCHING = "Ищу установленные ИИ и проверяю вход..."
 # Label colours for the voices of the other side (blue is kept for you).
 VOICE_COLOURS = ["#2e7d32", "#c2185b", "#ef6c00", "#6a1b9a", "#00838f", "#8d6e63"]
@@ -65,15 +69,16 @@ class App:
             self.base_folder = args.out_dir
 
         root.title("Расшифровка встречи")
+        set_icon(root)
         root.geometry("900x760")
         root.minsize(640, 520)
         root.protocol("WM_DELETE_WINDOW", self.on_close)
         style = ttk.Style()
-        style.configure("Big.TButton", font=("Segoe UI", 11, "bold"), padding=(14, 6))
-        style.configure("TLabel", font=("Segoe UI", 10))
-        style.configure("TCheckbutton", font=("Segoe UI", 10))
-        style.configure("Head.TLabel", font=("Segoe UI", 14, "bold"))
-        style.configure("Note.TLabel", foreground=GREY, font=("Segoe UI", 9))
+        style.configure("Big.TButton", font=(FONT, 11, "bold"), padding=(14, 6))
+        style.configure("TLabel", font=(FONT, 10))
+        style.configure("TCheckbutton", font=(FONT, 10))
+        style.configure("Head.TLabel", font=(FONT, 14, "bold"))
+        style.configure("Note.TLabel", foreground=GREY, font=(FONT, 9))
 
         self.build_header()
         self.setup_frame = self.build_setup()
@@ -93,10 +98,10 @@ class App:
         bar = ttk.Frame(self.root, padding=(14, 12, 14, 8))
         bar.pack(fill="x")
         ttk.Label(bar, text="Расшифровка встречи", style="Head.TLabel").pack(side="left")
-        self.timer = ttk.Label(bar, text="", font=("Segoe UI", 14))
+        self.timer = ttk.Label(bar, text="", font=(FONT, 14))
         self.timer.pack(side="right")
         self.status = ttk.Label(bar, text="Загружаю модель распознавания...", foreground=GREY,
-                                font=("Segoe UI", 11))
+                                font=(FONT, 11))
         self.status.pack(side="right", padx=16)
 
     def build_setup(self) -> ttk.Frame:
@@ -175,7 +180,7 @@ class App:
             note.grid(row=row, column=2, sticky="w", padx=8)
             self.meters[key] = (canvas, bar, note, [time.time()])
         self.mic_warning = tk.Label(
-            frame, background="#fff3c4", foreground="#5d4300", font=("Segoe UI", 10), justify="left",
+            frame, background="#fff3c4", foreground="#5d4300", font=(FONT, 10), justify="left",
             anchor="w", padx=10, pady=6, wraplength=820,
             text="Собеседников слышно, а ваш микрофон молчит уже больше 20 секунд. Проверьте, что он не "
                  "выключен (кнопка на гарнитуре или в программе созвона) и что здесь выбран тот же "
@@ -184,7 +189,7 @@ class App:
 
     def build_text(self) -> ttk.Frame:
         frame = ttk.Frame(self.root)
-        self.text = tk.Text(frame, wrap="word", font=("Segoe UI", self.text_size), padx=12, pady=10,
+        self.text = tk.Text(frame, wrap="word", font=(FONT, self.text_size), padx=12, pady=10,
                             relief="flat", background="#fbfbfb", spacing3=4, height=8)
         scroll = ttk.Scrollbar(frame, command=self.text.yview)
         self.text.configure(yscrollcommand=scroll.set)
@@ -207,15 +212,15 @@ class App:
         return frame
 
     def apply_text_size(self) -> None:
-        self.text.configure(font=("Segoe UI", self.text_size))
-        self.text.tag_configure("time", foreground=GREY, font=("Segoe UI", max(8, self.text_size - 3)))
-        self.text.tag_configure("draft", foreground="#9a9a9a", font=("Segoe UI", self.text_size, "italic"))
+        self.text.configure(font=(FONT, self.text_size))
+        self.text.tag_configure("time", foreground=GREY, font=(FONT, max(8, self.text_size - 3)))
+        self.text.tag_configure("draft", foreground="#9a9a9a", font=(FONT, self.text_size, "italic"))
         self.text.tag_configure("hint", foreground=GREY)
-        self.text.tag_configure("info", foreground=GREY, font=("Segoe UI", max(8, self.text_size - 3), "italic"))
-        self.text.tag_configure("me", foreground="#1565c0", font=("Segoe UI", self.text_size, "bold"))
-        self.text.tag_configure("others", foreground="#2e7d32", font=("Segoe UI", self.text_size, "bold"))
+        self.text.tag_configure("info", foreground=GREY, font=(FONT, max(8, self.text_size - 3), "italic"))
+        self.text.tag_configure("me", foreground="#1565c0", font=(FONT, self.text_size, "bold"))
+        self.text.tag_configure("others", foreground="#2e7d32", font=(FONT, self.text_size, "bold"))
         for number, colour in enumerate(VOICE_COLOURS):
-            self.text.tag_configure(f"voice{number}", foreground=colour, font=("Segoe UI", self.text_size, "bold"))
+            self.text.tag_configure(f"voice{number}", foreground=colour, font=(FONT, self.text_size, "bold"))
 
     def change_size(self, step: int) -> None:
         self.text_size = min(28, max(9, self.text_size + step))
@@ -372,7 +377,7 @@ class App:
     def open_folder(self) -> None:
         folder = getattr(self, "folder", None) or self.base_folder
         if os.path.isdir(folder):
-            os.startfile(folder)
+            tool.open_path(folder)
 
     # --- after the meeting ------------------------------------------------------------------------
 
@@ -427,7 +432,7 @@ class App:
         self.ai_note = ttk.Label(frame, text=SEARCHING, style="Note.TLabel", wraplength=760)
         self.ai_note.grid(row=6, column=0, columnspan=3, sticky="w", padx=(22, 0))
         self.path_row = ttk.Frame(frame)
-        ttk.Label(self.path_row, text="Путь к claude.exe / codex.cmd (или к их папке), или адрес локального "
+        ttk.Label(self.path_row, text="Путь к claude или codex (или к их папке), или адрес локального "
                   "сервера, например http://127.0.0.1:11434:", wraplength=740).pack(anchor="w")
         entry_line = ttk.Frame(self.path_row)
         entry_line.pack(anchor="w", pady=(2, 0))
@@ -559,7 +564,7 @@ class App:
             path = os.path.join(folder, name)
             if os.path.exists(path) and not any(b.cget("text") == f"Открыть: {title}" for b in self.result_buttons.winfo_children()):
                 ttk.Button(self.result_buttons, text=f"Открыть: {title}",
-                           command=lambda p=path: os.startfile(p)).pack(side="left", padx=(0, 6))
+                           command=lambda p=path: tool.open_path(p)).pack(side="left", padx=(0, 6))
 
     # --- events -----------------------------------------------------------------------------------
 
@@ -573,7 +578,7 @@ class App:
                     self.start_button.configure(state="normal")
                 elif kind == "model_failed":
                     self.status.configure(text="Модель не загрузилась", foreground=RED)
-                    messagebox.showerror("Ошибка", f"Модель распознавания не загрузилась:\n{data}\n\nЗапустите setup.cmd.")
+                    messagebox.showerror("Ошибка", f"Модель распознавания не загрузилась:\n{data}\n\nЗапустите {tool.SETUP_HINT}.")
                 elif kind == "final":
                     self.add_final(*data)
                 elif kind == "draft":
@@ -624,12 +629,31 @@ class App:
         self.root.destroy()
 
 
-def run(args) -> int:
+def set_icon(root: tk.Tk) -> None:
+    """The red microphone of the live-transcribe shortcut, in the title bar and the taskbar."""
     try:
-        ctypes.windll.shcore.SetProcessDpiAwareness(1)  # sharp text on high-DPI screens
-    except Exception:
-        pass
+        if os.name == "nt":
+            root.iconbitmap(default=os.path.join(ICONS, "live.ico"))
+        else:
+            root.icon_image = tk.PhotoImage(file=os.path.join(ICONS, "live.png"))
+            root.iconphoto(True, root.icon_image)
+    except tk.TclError:
+        pass  # no icon is no reason not to start
+
+
+def run(args) -> int:
+    global FONT
+    if os.name == "nt":
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)  # sharp text on high-DPI screens
+            # Its own taskbar button with its own icon, not grouped under python.exe.
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("transcribe.live")
+        except Exception:
+            pass
     root = tk.Tk()
+    if os.name != "nt":
+        families = set(tkfont.families(root))
+        FONT = next((name for name in LINUX_FONTS if name in families), "TkDefaultFont")
     App(root, args)
     root.mainloop()
     return 0

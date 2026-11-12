@@ -1,2 +1,4 @@
 # cmd.exe misreads labels and goto in files with LF-only line endings.
 *.cmd text eol=crlf
+# bash refuses scripts with CRLF line endings.
+*.sh text eol=lf

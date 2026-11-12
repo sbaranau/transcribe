@@ -89,7 +89,10 @@ def find_claude() -> str | None:
     found = shutil.which("claude")
     if found:
         return found
-    fallback = os.path.join(os.path.expanduser("~"), ".local", "bin", "claude.exe")
+    # The native installer puts it here, which a window started before the install may not have
+    # on its PATH.
+    fallback = os.path.join(os.path.expanduser("~"), ".local", "bin",
+                            "claude.exe" if os.name == "nt" else "claude")
     return fallback if os.path.isfile(fallback) else None
 
 
@@ -123,7 +126,7 @@ def classify(entered: str) -> tuple[str, str] | None:
     if entered.lower().startswith(("http://", "https://")):
         return ("local", entered.rstrip("/")) if local_models(entered) else None
     if os.path.isdir(entered):
-        for name in ("claude.exe", "codex.cmd", "claude.cmd"):
+        for name in ("claude.exe", "codex.cmd", "claude.cmd", "claude", "codex"):
             if os.path.isfile(os.path.join(entered, name)):
                 entered = os.path.join(entered, name)
                 break

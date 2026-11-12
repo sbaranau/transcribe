@@ -28,55 +28,69 @@ transcript.
 
 ## Install and update
 
-Needs Windows and `git` (`winget install --id Git.Git`). [`uv`](https://docs.astral.sh/uv/) is
-installed by `setup.cmd` with `winget install --id astral-sh.uv` when it is missing (winget may
-ask you to accept its agreements; the script accepts nothing for you):
+Windows 10/11 or Linux (see "Linux" below), and `git` (`winget install --id Git.Git` on
+Windows). [`uv`](https://docs.astral.sh/uv/) is installed by `windows\setup.cmd` with
+`winget install --id astral-sh.uv` when it is missing (winget may ask you to accept its
+agreements; the script accepts nothing for you):
 
 ```
 git clone https://github.com/sbaranau/transcribe.git C:\bin\transcribe
-C:\bin\transcribe\setup.cmd
+C:\bin\transcribe\windows\setup.cmd
 ```
 
 `setup.cmd` puts a private Python 3.12, the packages (with the NVIDIA CUDA libraries) and the
 models (`app\download_models.py`: Whisper and the voice separation models) into `app\`, about
-3 GB. Update with `git -C C:\bin\transcribe pull`, and run `setup.cmd` again when
+3 GB, and then makes three shortcuts with their own icons in the tool folder
+(`app\shortcuts.py`; a `.cmd` file cannot have an icon of its own): "Расшифровать запись"
+(blue page with a sound wave, `windows\drop-files-here.cmd`; recordings can be dragged onto it),
+"Расшифровка встречи на лету" (red microphone, `windows\live-transcribe.cmd`, console minimized)
+and "Установка и обновление" (grey gear, `windows\setup.cmd`). The shortcuts hold absolute paths
+and are not in git (`/*.lnk`). The icons are drawn by `app\icons\make_icons.py` (numpy, no
+image library) into `.ico` and `.png` files; the live window uses the same microphone icon.
+
+Update with `git -C C:\bin\transcribe pull`, and run `windows\setup.cmd` again when
 `app\requirements.txt` or the models changed; models already there are not downloaded again.
-The environment is bound to its folder path: after moving the folder, run `setup.cmd` again.
-Installs from before 2026-11-12 had `python\`, `venv\` and `models\` at the top level; after
-pulling, run `setup.cmd` once: it moves the models into `app\models` and rebuilds the rest there.
+`setup.cmd` stops at once if the tool is running (the environment's `python.exe` is locked):
+`uv venv --clear` would otherwise delete the packages and then fail on that file.
+The environment and the shortcuts are bound to the folder path: after moving the folder, run
+`windows\setup.cmd` again.
+Installs from before 2026-11-12 had the `.cmd` files (and, earlier, `python\`, `venv\` and
+`models\`) at the top level; after pulling, run `windows\setup.cmd` once: it makes the
+shortcuts, re-creates the Send To entry if asked (the old one points to a file that is gone),
+and moves an old top-level `models\` into `app\models`.
 A Russian guide is in `ИНСТРУКЦИЯ.md`.
 
 ## Usage
 
-Drag recordings in Explorer onto `drop-files-here.cmd` (or double-click it and drag a file into
-the window). It writes `<name>.txt` and `<name>.srt` and asks, in Russian, with numbered answers
+Drag recordings in Explorer onto the "Расшифровать запись" shortcut (or double-click it and
+drag a file into the window). It writes `<name>.txt` and `<name>.srt` and asks, in Russian, with numbered answers
 (Enter = "don't know" / "no"): the language (Russian, English, German, French, several
 languages, or detect), whether to separate speakers and how many there are (or estimate),
 whether an AI should check the text (only with speakers), whether to make a summary, and, if
 either is wanted, which of the AI tools found on the computer to use.
 
 If no AI is found, it offers to skip the check and summary (the transcript is made anyway) or to enter
-the path to `claude.exe` / `codex.cmd` (or their folder) or the address of a local model server.
+the path to `claude.exe` / `codex.cmd` (`claude` / `codex` on Linux; or their folder) or the address of a local model server.
 A working path is stored in `app\ai.local.ini` (not in git) and found again next time; delete the
 file to search afresh.
 
-**Live**: `live-transcribe.cmd` transcribes a meeting while it happens, without a video
+**Live**: the "Расшифровка встречи на лету" shortcut transcribes a meeting while it happens, without a video
 recording; see "Live mode" below.
 
 Optionally the drop script is in the Explorer **Send To** menu (right-click a recording, Send
-To, "Расшифровать"). `setup.cmd` asks whether to add it; `send-to-menu.cmd add|remove|status`
-changes it later. Only the tool's own shortcut in the user's SendTo folder is touched.
+To, "Расшифровать", with the same icon). `windows\setup.cmd` asks whether to add it;
+`windows\send-to-menu.cmd add|remove|status` changes it later. Only the tool's own shortcut in
+the user's SendTo folder is touched.
 
 From a terminal, for options the questions do not cover or for many files without questions
-(`app\transcribe.cmd` is kept out of the top level, where people would take it for the main
-entry point):
+(`linux/transcribe.sh` takes the same options):
 
 ```
-C:\bin\transcribe\app\transcribe.cmd "meeting.mp4" --language ru
-C:\bin\transcribe\app\transcribe.cmd "meeting.mp4" --language ru --speakers 3 --check --summary --srt
-C:\bin\transcribe\app\transcribe.cmd "meeting.mp4" --ask             (the questions, as when dragging)
-C:\bin\transcribe\app\transcribe.cmd "meeting.txt" --check --summary (check and summarize an existing transcript)
-C:\bin\transcribe\app\transcribe.cmd --help
+C:\bin\transcribe\windows\transcribe.cmd "meeting.mp4" --language ru
+C:\bin\transcribe\windows\transcribe.cmd "meeting.mp4" --language ru --speakers 3 --check --summary --srt
+C:\bin\transcribe\windows\transcribe.cmd "meeting.mp4" --ask             (the questions, as when dragging)
+C:\bin\transcribe\windows\transcribe.cmd "meeting.txt" --check --summary (check and summarize an existing transcript)
+C:\bin\transcribe\windows\transcribe.cmd --help
 ```
 
 Options: `--language ru|de|en|...|multi` (default: detected from the first 30 seconds; `multi`
@@ -87,7 +101,7 @@ first one found), `--srt`, `--terms FILE`, `--no-terms`, `--no-filter`, `--out-d
 
 ## Live mode
 
-`live-transcribe.cmd` (`app\transcribe.cmd --live`) opens a window (`app\live_gui.py`, tkinter,
+`windows\live-transcribe.cmd` (`transcribe.cmd --live`; `linux/live-transcribe.sh`) opens a window (`app\live_gui.py`, tkinter,
 no extra package) on the engine in `app\live.py`:
 
 - **Before**: language, microphone (default preselected, or none), output devices to listen to
@@ -103,7 +117,8 @@ no extra package) on the engine in `app\live.py`:
   output in the window, and buttons to open the results. Closing the window while recording asks,
   then stops properly.
 
-Engine: the microphone and, through WASAPI loopback, the chosen output devices (so the other side
+Engine: the microphone and, through WASAPI loopback on Windows or the sink's `.monitor` source of
+PulseAudio/PipeWire on Linux (`loopback_of`), the chosen output devices (so the other side
 of a Teams or Zoom call is heard whichever device the call plays on) are read with
 [soundcard](https://github.com/bastibe/SoundCard) (BSD-3-Clause), each in its own thread in 0.25 s
 blocks; the microphone sets the pace, a loopback block that is not there yet is silence (loopback
@@ -148,7 +163,8 @@ On a synthetic call (other side at -25 dB with -40 dB background noise, own voic
 a turned-down microphone), the words of the own side found went from 66% (one mixed stream, no
 gain) to 97% with a headset, and from 59% to 97% with loudspeakers (echo at -35 dB); the other
 side stayed at 96%. `--live --console --ask` is the same without the window
-(Enter stops). Default folder: `Documents\Transcripts\<yyyy-mm-dd hh-mm>`, or `--out-dir`. The
+(Enter stops). Default folder: `Documents\Transcripts\<yyyy-mm-dd hh-mm>` (on Linux the XDG Documents folder,
+`xdg-user-dir DOCUMENTS`), or `--out-dir`. The
 window remembers the last language and microphone in `app\ui.local.ini` (not in git).
 
 Piece length, measured by replaying recordings through the engine and comparing the live text
@@ -257,7 +273,7 @@ dropped. The tool prints what it removed (`Filtered: ...`); `--no-filter` keeps 
 ## Terms
 
 Names and jargon Whisper should spell right go one per line into `terms.txt` in the tool folder,
-next to `setup.cmd` (optional). It is not in git, so company product names and colleague names
+next to `README.md` (optional). It is not in git, so company product names and colleague names
 never reach the repository; to share it, send the file. `--terms FILE` adds a file for one
 meeting. The terms are passed to Whisper as `hotwords` for every 30-second window, `--terms`
 files first, then `terms.txt`. Whisper reads
@@ -292,28 +308,64 @@ For a `.txt` input, the summary is written next to that `.txt`.
 Recognition makes mistakes with names and technical terms, and the speaker labels with
 overlapping speech, similar voices and people who say very little.
 
+## Linux
+
+`linux/` has the same entry points as shell scripts; the Python code is shared and branches on
+`os.name` only where it must (Documents folder, opening files with `xdg-open`, the CUDA library
+path, the loopback device, fonts and the window icon).
+
+```
+git clone https://github.com/sbaranau/transcribe.git ~/transcribe
+bash ~/transcribe/linux/setup.sh
+```
+
+- `setup.sh`: offers to install `uv` from astral.sh into `~/.local/bin` when missing; builds
+  `app/python`, `app/venv` (`bin/python`) and `app/models` like the Windows setup; notes when
+  `libpulse` is missing (needed by the live mode, `sudo apt install libpulse0`); refuses a folder
+  that holds a Windows `app\venv` (one folder cannot serve both, e.g. through `/mnt/c` in WSL);
+  asks whether to add the menu entries.
+- `menu.sh add|remove|status`: `.desktop` entries in `~/.local/share/applications` with the same
+  icons; "Расшифровать запись" (terminal) is also offered under Open With for common audio and
+  video types.
+- `transcribe.sh`: puts the pip-installed NVIDIA libraries (`nvidia/*/lib`) on `LD_LIBRARY_PATH`
+  before Python starts (CTranslate2 finds cuBLAS/cuDNN only there), then runs the tool.
+- `drop-files-here.sh` (`--srt --ask`, waits for Enter in a terminal), `live-transcribe.sh`.
+
+Tested on Ubuntu 22.04 in WSL2 with an NVIDIA RTX 2000 Ada: setup from scratch, a transcription
+with speakers on CUDA (same text as on Windows), the questions of `drop-files-here.sh`, the menu
+entries, and, through WSLg's PulseAudio, the device list, the monitor lookup, capture from both
+sources and the live window with its icon. Not tested: a live meeting with real sound on Linux,
+a desktop Linux (GNOME/KDE) outside WSL, PipeWire, a machine without an NVIDIA GPU. macOS is not
+supported: `soundcard` cannot record the system sound there without a virtual device such as
+BlackHole, and there is no CUDA.
+
 ## Folder layout
 
-The top level holds only what people start or read; everything else is in `app\`.
+The top level holds only the shortcuts and the guides; the scripts are in `windows\` and
+`linux/`, everything else is in `app\`.
 
 | Path | Content |
 |---|---|
-| `drop-files-here.cmd` | drag-and-drop entry point with the questions |
-| `live-transcribe.cmd` | live transcription during a meeting |
-| `setup.cmd` | installs `uv` with winget if missing; builds `app\python\`, `app\venv\` and `app\models\`, e.g. on another machine; asks about the Send To menu; moves an old top-level layout into `app\` |
-| `send-to-menu.cmd` | add or remove the Send To menu entry |
+| "Расшифровать запись", "Расшифровка встречи на лету", "Установка и обновление" (`.lnk`) | shortcuts with icons, made by `windows\setup.cmd` (not in git) |
+| `windows\drop-files-here.cmd` | drag-and-drop entry point with the questions |
+| `windows\live-transcribe.cmd` | live transcription during a meeting |
+| `windows\setup.cmd` | installs `uv` with winget if missing; builds `app\python\`, `app\venv\` and `app\models\`; makes the shortcuts; asks about the Send To menu; moves an old top-level layout into `app\` |
+| `windows\send-to-menu.cmd` | add or remove the Send To menu entry |
+| `windows\transcribe.cmd` | command-line entry point |
+| `linux/` | `setup.sh`, `drop-files-here.sh`, `live-transcribe.sh`, `transcribe.sh`, `menu.sh` |
 | `ИНСТРУКЦИЯ.md`, `README.md` | user guide in Russian, this file |
 | `terms.txt` | your terms for Whisper (optional, not in git) |
-| `app\transcribe.cmd` | command-line entry point |
 | `app\transcribe.py` | the tool |
 | `app\live.py`, `app\live_gui.py` | live mode: capture, mixing, transcription in pieces; its window |
 | `app\ai_engines.py` | finding and calling the AI for the check and the summary |
 | `app\checker.py`, `app\check_prompt.md` | the text check: applying the AI's findings; the instructions it gets |
 | `app\summary_prompt.md` | the instructions the AI gets for the summary |
 | `app\summary_notes_prompt.md` | notes per part of a long transcript, for local models |
-| `app\download_models.py`, `app\send_to_menu.py` | model download, Send To shortcut |
+| `app\download_models.py` | model download |
+| `app\shortcuts.py` | Windows shortcuts with icons: in the tool folder and in Send To |
+| `app\icons\` | `transcribe`, `live`, `setup` as `.ico` (Windows) and `.png` (Linux, window icon); `make_icons.py` draws them |
 | `app\requirements.txt` | pinned packages (`av` must stay below 15 for faster-whisper 1.2.1) |
-| `app\ai.local.ini` | where the summary AI was found, if a path was entered (not in git) |
+| `app\ai.local.ini`, `app\ui.local.ini` | where the summary AI was found, if a path was entered; the live window's last language and microphone (not in git) |
 | `app\python\` | private Python 3.12 (installed by uv) |
 | `app\venv\` | virtual environment with the packages and the NVIDIA CUDA libraries |
 | `app\models\large-v3-turbo\` | the Whisper model, so it works offline |

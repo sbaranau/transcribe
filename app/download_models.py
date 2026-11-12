@@ -1,4 +1,4 @@
-"""Downloads the models into models\\ (called by setup.cmd); files already there are kept.
+"""Downloads the models into app/models (called by the setup); files already there are kept.
 
 - Whisper large-v3-turbo (faster-whisper format) from Hugging Face, about 1.6 GB, no login.
 - Voice separation (speaker diarization) for sherpa-onnx, about 45 MB, from the sherpa-onnx

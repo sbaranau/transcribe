@@ -24,6 +24,7 @@ import gc
 import os
 import queue
 import re
+import subprocess
 import sys
 import threading
 import time
@@ -85,10 +86,21 @@ LIVE_SPLIT_PAUSE = 0
 
 
 def documents_folder() -> str:
-    """The user's Documents folder, also when it is redirected (OneDrive)."""
-    buffer = ctypes.create_unicode_buffer(260)
-    if ctypes.windll.shell32.SHGetFolderPathW(None, 5, None, 0, buffer) == 0:  # CSIDL_PERSONAL
-        return buffer.value
+    """The user's Documents folder, also when it is redirected (OneDrive on Windows, a localized
+    name such as ~/Документы on Linux)."""
+    if os.name == "nt":
+        buffer = ctypes.create_unicode_buffer(260)
+        if ctypes.windll.shell32.SHGetFolderPathW(None, 5, None, 0, buffer) == 0:  # CSIDL_PERSONAL
+            return buffer.value
+    else:
+        try:
+            found = subprocess.run(["xdg-user-dir", "DOCUMENTS"], capture_output=True, text=True,
+                                   timeout=5).stdout.strip()
+            # Without a configured Documents folder, xdg-user-dir answers the home folder.
+            if found and os.path.isdir(found) and found != os.path.expanduser("~"):
+                return found
+        except (OSError, subprocess.SubprocessError):
+            pass
     return os.path.join(os.path.expanduser("~"), "Documents")
 
 
@@ -108,6 +120,18 @@ def list_devices() -> tuple[list, object, list]:
     """(microphones, default microphone, output devices)."""
     import soundcard as sc
     return sc.all_microphones(), sc.default_microphone(), sc.all_speakers()
+
+
+def loopback_of(sc, speaker):
+    """The recording device that hears what an output device plays. On Windows it has the
+    output's id (WASAPI loopback); with PulseAudio/PipeWire on Linux it is the sink's monitor
+    source, "<sink>.monitor"."""
+    if os.name != "nt":
+        monitor = str(speaker.id) + ".monitor"
+        for device in sc.all_microphones(include_loopback=True):
+            if str(device.id) == monitor:
+                return device
+    return sc.get_microphone(id=str(speaker.id), include_loopback=True)
 
 
 class Source(threading.Thread):
@@ -229,7 +253,7 @@ class LiveSession:
             import soundcard as sc
             for speaker in speakers:
                 try:
-                    device = sc.get_microphone(id=str(speaker.id), include_loopback=True)
+                    device = loopback_of(sc, speaker)
                     self.sources.append(Source(device, "computer sound: " + speaker.name, True))
                 except Exception as error:
                     self.on_info(f"Cannot listen to {speaker.name}: {error}")
@@ -587,7 +611,11 @@ def run(args) -> int:
     try:
         import soundcard  # noqa: F401
     except ImportError:
-        print("The audio capture package is missing. Run setup.cmd.", file=sys.stderr)
+        print(f"The audio capture package is missing. Run {tool.SETUP_HINT}.", file=sys.stderr)
+        return 3
+    except OSError as error:  # Linux: soundcard loads the PulseAudio client library at import
+        print(f"Cannot use the sound system: {error}\nThe live mode needs PulseAudio or PipeWire "
+              "and its client library (Ubuntu/Debian: sudo apt install libpulse0).", file=sys.stderr)
         return 3
     if not args.console:
         import live_gui
