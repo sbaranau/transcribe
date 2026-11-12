@@ -9,6 +9,17 @@ for %%T in ("%~dp0..") do set "ROOT=%%~fT\"
 set "APP=%ROOT%app\"
 set "HF_HUB_DISABLE_SYMLINKS_WARNING=1"
 
+rem Started from the shortcut or by double-click, the window would close as soon as the script
+rem ends, with the result or the error unread; then it waits for a key. From a terminal it does not.
+set "WAIT_AT_END="
+echo(%cmdcmdline%| findstr /i /l /c:"%~nx0" >nul && set "WAIT_AT_END=1"
+call :main
+set "RC=%ERRORLEVEL%"
+if not "%RC%"=="0" echo Setup FAILED, see the messages above.
+if defined WAIT_AT_END pause
+exit /b %RC%
+
+:main
 call :check_not_running || exit /b 1
 where uv >nul 2>nul || call :install_uv || exit /b 1
 
