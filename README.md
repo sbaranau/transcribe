@@ -98,7 +98,8 @@ For a `.txt` input, the summary is written next to that `.txt`.
   `[hh:mm:ss]` timestamp, so a passage can be found in the recording. A new paragraph starts
   at the first sentence end after about 30 seconds (at the latest after 90 seconds), or after
   a pause of 2 seconds or more.
-- `<name>.srt`: subtitles with exact segment timings. Players pick them up automatically only
+- `<name>.srt`: subtitles timed by word timestamps; a Whisper segment is split where its words
+  are a second or more apart, so a subtitle or paragraph never spans a long pause. Players pick them up automatically only
   from the recording's folder, so load them by hand (VLC: Subtitle > Add Subtitle File), or move
   the `.srt` next to the recording.
 - `<name>.summary.md`: In short, Main ideas (every idea, proposal, argument and number, grouped

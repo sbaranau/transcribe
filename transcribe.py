@@ -46,6 +46,8 @@ PARAGRAPH_PAUSE_SECONDS = 2.0
 PARAGRAPH_SOFT_LIMIT_SECONDS = 30.0
 PARAGRAPH_HARD_LIMIT_SECONDS = 90.0
 SENTENCE_ENDINGS = (".", "?", "!", "…")
+# A segment is split where two words are this far apart (see split_on_pauses).
+WORD_PAUSE_SECONDS = 1.0
 
 # Phrases Whisper invents in silence or noise, learned from subtitled videos. A segment is
 # dropped only when it is short and contains one of them, so real speech is kept.
@@ -197,6 +199,31 @@ def output_base(path: str, out_dir: str | None) -> str:
     return os.path.join(directory, name)
 
 
+def split_on_pauses(segment, text: str) -> list[tuple[float, float, str]]:
+    """Splits a segment where its words are separated by a pause, so each piece carries the
+    times of what is actually said. Whisper often puts words from both sides of a long pause
+    into one segment, which would start a subtitle or paragraph minutes too early.
+    A segment whose text the filter changed is kept whole, timed by its first and last word."""
+    words = segment.words or []
+    if not words:
+        return [(segment.start, segment.end, text)]
+    if text != segment.text.strip():
+        return [(words[0].start, words[-1].end, text)]
+    pieces, current = [], [words[0]]
+    for word in words[1:]:
+        if word.start - current[-1].end >= WORD_PAUSE_SECONDS:
+            pieces.append(current)
+            current = []
+        current.append(word)
+    pieces.append(current)
+    result = []
+    for piece in pieces:
+        piece_text = "".join(word.word for word in piece).strip()
+        if piece_text:
+            result.append((piece[0].start, piece[-1].end, piece_text))
+    return result or [(words[0].start, words[-1].end, text)]
+
+
 def transcribe_file(model, path: str, args) -> str:
     started = time.time()
     segments, info = model.transcribe(
@@ -208,6 +235,9 @@ def transcribe_file(model, path: str, args) -> str:
         # Feeding each window the previous text makes one misrecognition or loop spread over
         # the following minutes; hotwords are still passed to every window.
         condition_on_previous_text=False,
+        # Segment times come from the first and last spoken word: without this, a segment
+        # next to a long pause can start minutes before its words are said.
+        word_timestamps=True,
     )
     print(f"Language: {info.language} (p={info.language_probability:.2f}), "
           f"duration {format_clock(info.duration)}", flush=True)
@@ -234,11 +264,12 @@ def transcribe_file(model, path: str, args) -> str:
                     text = segment_filter.clean(text)
                 if not text:
                     continue
-                kept += 1
-                paragraphs.add(segment.start, segment.end, text)
-                if srt_file:
-                    srt_file.write(f"{kept}\n{format_srt_time(segment.start)} --> "
-                                   f"{format_srt_time(segment.end)}\n{text}\n\n")
+                for start, end, piece in split_on_pauses(segment, text):
+                    kept += 1
+                    paragraphs.add(start, end, piece)
+                    if srt_file:
+                        srt_file.write(f"{kept}\n{format_srt_time(start)} --> "
+                                       f"{format_srt_time(end)}\n{piece}\n\n")
                 if segment.end - last_report >= 300:
                     last_report = segment.end
                     percent = 100 * segment.end / info.duration if info.duration else 0
