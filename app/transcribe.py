@@ -639,7 +639,16 @@ def choose_ai(args, interactive: bool) -> bool:
     """Sets args.ai_engine and args.ai_location. Asks when interactive; otherwise takes --ai or
     the first installed one. Returns False if there is none (the check and the summary are
     then skipped)."""
+    if interactive:
+        print("\nИщу установленные ИИ: Claude Code, Codex (ChatGPT), локальные модели (Ollama, "
+              "LM Studio)...", flush=True)
+    else:
+        print("Looking for the installed AI tools...", flush=True)
+    started = time.time()
     found = ai_engines.find_engines()
+    if interactive:
+        names = ", ".join(ai_engines.TITLES[engine] for engine in found) or "ничего"
+        print(f"Найдено за {time.time() - started:.0f} с: {names}.", flush=True)
     if args.ai:
         if args.ai in found:
             args.ai_engine, args.ai_location = args.ai, found[args.ai]

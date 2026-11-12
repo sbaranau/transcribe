@@ -13,9 +13,11 @@ import configparser
 import json
 import os
 import shutil
+import socket
 import subprocess
 import tempfile
 import urllib.error
+import urllib.parse
 import urllib.request
 
 TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -55,9 +57,24 @@ def get_json(url: str, timeout: float = 3.0):
         return json.loads(response.read().decode("utf-8"))
 
 
+def port_open(url: str, timeout: float = 0.5) -> bool:
+    """Quick look whether anything listens at the URL's host and port. Windows takes about two
+    seconds to refuse a closed local port, so asking a server that is not there over HTTP
+    made the search for installed AI tools hang for several seconds."""
+    parts = urllib.parse.urlsplit(url)
+    port = parts.port or (443 if parts.scheme == "https" else 80)
+    try:
+        with socket.create_connection((parts.hostname or "127.0.0.1", port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
 def local_models(url: str) -> list[str]:
     """Model names a local server offers; empty if nothing answers there."""
     url = url.rstrip("/")
+    if not port_open(url):
+        return []
     try:
         return [m["name"] for m in get_json(url + "/api/tags").get("models", [])]  # Ollama
     except (OSError, ValueError, KeyError):
