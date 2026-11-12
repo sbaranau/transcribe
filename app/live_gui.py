@@ -403,12 +403,16 @@ class App:
         self.delete_sound = tk.BooleanVar(value=False)
         ttk.Checkbutton(frame, text="Расшифровать запись заново целиком (точнее, чем на лету)",
                         variable=self.redo, command=self.refresh_after).grid(row=1, column=0, columnspan=3, sticky="w", pady=(8, 2))
-        self.split_box = ttk.Checkbutton(frame, text="Разделить по говорящим, человек:", variable=self.split,
-                                         command=self.refresh_after)
+        call = len(self.session.streams) >= 2 if hasattr(self.session, "streams") else False
+        self.is_call = call  # a call has "Вы" / "Собеседники" labels even without the separation
+        self.split_box = ttk.Checkbutton(
+            frame, text="Разделить собеседников по голосам, всего человек:" if call else
+            "Разделить по говорящим, человек:", variable=self.split, command=self.refresh_after)
         self.split_box.grid(row=2, column=0, sticky="w", padx=(22, 0), pady=2)
         self.count_box = ttk.Spinbox(frame, from_=0, to=20, width=4, textvariable=self.count)
         self.count_box.grid(row=2, column=1, sticky="w", pady=2)
-        ttk.Label(frame, text="0 = не знаю", style="Note.TLabel").grid(row=2, column=2, sticky="w", padx=6)
+        ttk.Label(frame, text="вместе с вами; 0 = не знаю" if call else "0 = не знаю",
+                  style="Note.TLabel").grid(row=2, column=2, sticky="w", padx=6)
         self.check_box = ttk.Checkbutton(frame, text="Проверить текст с помощью ИИ: имена вместо номеров, реплики с чужой меткой",
                                          variable=self.check, command=self.refresh_after)
         self.check_box.grid(row=3, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=2)
@@ -453,7 +457,7 @@ class App:
         redo = self.redo.get()
         self.split_box.configure(state="normal" if redo else "disabled")
         self.count_box.configure(state="normal" if redo and self.split.get() else "disabled")
-        can_check = redo and self.split.get()
+        can_check = redo and (self.split.get() or getattr(self, "is_call", False))
         if not can_check:
             self.check.set(False)
         self.check_box.configure(state="normal" if can_check else "disabled")

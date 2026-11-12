@@ -130,8 +130,17 @@ summed computer sound stay **two streams**:
 - echo: runs of 3+ words of a microphone segment that match what the computer played within 2 s
   are removed (speakers instead of a headset); a segment that is 60%+ echo with nothing left of its
   own is dropped;
-- `meeting.wav` gets both as two channels (left: microphone after the gain, right: computer); the
-  full processing reads it downmixed;
+- `meeting.wav` gets both as two channels (left: microphone after the gain, right: computer); with
+  the microphone only (a room), one channel;
+- the full processing of such a two-channel recording (`call_recording`: two channels and
+  `meeting.live.txt` next to it) keeps who is who: Whisper hears both channels mixed, a word is
+  "Вы" when the microphone channel is above -40 dB and twice (6 dB) as loud as the computer
+  channel, and only the computer channel is separated by voice ("Собеседник 1", "2", ...; the
+  number given counts you too, so one voice fewer is looked for). Without `--speakers` the text is
+  still split into "Вы" / "Собеседники". Tested with synthetic calls (headset and loudspeaker echo:
+  your phrases always "You") and with 3 minutes of a 4-person AMI meeting as the other side plus
+  two phrases of "you": both phrases "You", no word of the others taken for yours, the others in 4
+  voices;
 - when no piece is waiting, the stream with the most new sound is drafted (beam 1) at most every
   2 s.
 

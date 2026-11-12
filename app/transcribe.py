@@ -35,6 +35,9 @@ import re
 import sys
 import threading
 import time
+import wave
+
+import numpy as np
 
 import ai_engines
 import checker
@@ -106,6 +109,16 @@ MIN_SPEAKER_SHARE = 0.02
 # 0.1 took ~28 min per 3 h of audio; 0.25 counted the same speakers on the reference
 # recordings in ~11 min, 0.75 started to miss.
 WINDOW_SHIFT_RATIO = 0.25
+# Calls recorded by the live mode: (you, the other side as a whole, one person of the other side).
+STREAM_LABELS = {"ru": ("Вы", "Собеседники", "Собеседник"), "en": ("You", "Others", "Speaker"),
+                 "de": ("Sie", "Andere", "Sprecher"), "fr": ("Vous", "Autres", "Intervenant"),
+                 "uk": ("Ви", "Співрозмовники", "Співрозмовник")}
+# In such a call, a word is yours when the microphone channel is this many times louder than the
+# computer channel (6 dB); echo of the other side in the microphone is quieter than the original.
+CALL_CHANNEL_MARGIN = 2.0
+# ... and carries real speech: the live mode brings your voice to about -20 dB, while microphone
+# background noise could otherwise win over a quiet moment of the other side.
+CALL_MIC_MIN_LEVEL = 0.01  # -40 dB
 SPEAKER_LABELS = {"ru": "Говорящий", "uk": "Мовець", "de": "Sprecher", "fr": "Intervenant",
                   "it": "Parlante", "es": "Hablante"}
 
@@ -497,23 +510,69 @@ def speaker_label(language: str | None) -> str:
     return SPEAKER_LABELS.get(language or "", "Speaker")
 
 
+def call_recording(path: str) -> bool:
+    """A recording made by the live mode: two channels (left: your microphone after its gain,
+    right: the computer sound, i.e. the other side), with meeting.live.txt next to it."""
+    if not path.lower().endswith(".wav"):
+        return False
+    if not os.path.isfile(os.path.join(os.path.dirname(os.path.abspath(path)), "meeting.live.txt")):
+        return False
+    try:
+        with wave.open(path) as recording:
+            return recording.getnchannels() == 2
+    except (OSError, wave.Error):
+        return False
+
+
+class ChannelSpeakers:
+    """Labels for a call recorded by the live mode. Who said a word is known from the channels:
+    words clearly louder in the microphone channel are yours ("Вы"); the other words belong to
+    the other side, told apart by voice when the computer channel was separated ("Собеседник 2"),
+    or named as a whole ("Собеседники")."""
+
+    def __init__(self, microphone, computer, others: "SpeakerTimeline | None", language: str | None):
+        self.microphone, self.computer, self.others = microphone, computer, others
+        self.mine, self.other_side, _ = STREAM_LABELS.get(language or "", ("You", "Others", "Speaker"))
+
+    def speaker_of(self, start: float, end: float) -> str:
+        first = int(start * SAMPLE_RATE)
+        last = max(int(end * SAMPLE_RATE), first + 1)
+        mine = float(np.sqrt(np.mean(np.square(self.microphone[first:last]))))
+        theirs = float(np.sqrt(np.mean(np.square(self.computer[first:last]))))
+        if mine >= CALL_MIC_MIN_LEVEL and mine > CALL_CHANNEL_MARGIN * theirs:
+            return self.mine
+        return self.others.speaker_of(start, end) if self.others else self.other_side
+
+
 def transcribe_file(model, path: str, args) -> str:
     from faster_whisper import decode_audio
 
     started = time.time()
     # Decoded once and shared: the voice separation needs the same 16 kHz samples.
-    audio = decode_audio(path, sampling_rate=SAMPLE_RATE)
+    call = call_recording(path)
+    if call:
+        # Live-mode call: Whisper hears both sides together; who spoke comes from the channels, and
+        # only the other side's channel is separated by voice (the count given includes you).
+        microphone, computer = decode_audio(path, sampling_rate=SAMPLE_RATE, split_stereo=True)
+        audio = (microphone + computer) / 2
+        separate_audio = computer
+        count_of_voices = (args.speakers - 1 if args.speakers >= 2 else 0) if args.speakers is not None else None
+        print("Call recorded by the live mode: your words are told by the microphone channel.", flush=True)
+    else:
+        audio = decode_audio(path, sampling_rate=SAMPLE_RATE)
+        separate_audio, count_of_voices = audio, args.speakers
     # The voice separation runs on the CPU in a thread while Whisper runs (on the GPU), so it
     # adds little time; its result is needed only when the text is written.
     voices = {}
     voice_thread = None
-    if args.speakers is not None:
-        count = f"{args.speakers} speakers" if args.speakers else "number of speakers unknown"
-        print(f"Separating voices ({count}) on the CPU, alongside the transcription...", flush=True)
+    if count_of_voices is not None:
+        count = f"{count_of_voices} speakers" if count_of_voices else "number of speakers unknown"
+        side = " of the other side" if call else ""
+        print(f"Separating voices{side} ({count}) on the CPU, alongside the transcription...", flush=True)
 
         def separate() -> None:
             try:
-                voices["turns"] = diarize(audio, args.speakers)
+                voices["turns"] = diarize(separate_audio, count_of_voices)
             except Exception as error:  # reported after the transcription
                 voices["error"] = error
 
@@ -561,7 +620,13 @@ def transcribe_file(model, path: str, args) -> str:
         voice_thread.join()
         if "error" in voices:
             raise RuntimeError(f"voice separation failed: {voices['error']}")
-        speakers = SpeakerTimeline(voices["turns"], speaker_label(info.language))
+        if call:
+            one_of_others = STREAM_LABELS.get(info.language or "", ("You", "Others", "Speaker"))[2]
+            speakers = SpeakerTimeline(voices["turns"], one_of_others)
+        else:
+            speakers = SpeakerTimeline(voices["turns"], speaker_label(info.language))
+    if call:
+        speakers = ChannelSpeakers(microphone, computer, speakers, info.language)
 
     base = output_base(path, args.out_dir)
     os.makedirs(os.path.dirname(base), exist_ok=True)

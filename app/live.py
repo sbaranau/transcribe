@@ -65,10 +65,9 @@ ECHO_SIMILARITY = 0.6
 # The window warns when the other side is heard but the microphone stays below this level.
 MIC_SILENT_LEVEL = 0.0025  # about -52 dB
 MIC_SILENT_SECONDS = 20.0
-# (you, the other side as a whole, one person of the other side) per language.
-STREAM_LABELS = {"ru": ("Вы", "Собеседники", "Собеседник"), "en": ("You", "Others", "Speaker"),
-                 "de": ("Sie", "Andere", "Sprecher"), "fr": ("Vous", "Autres", "Intervenant"),
-                 "uk": ("Ви", "Співрозмовники", "Співрозмовник")}
+# (you, the other side as a whole, one person of the other side) per language; shared with the
+# full processing of the recording, so both use the same labels.
+STREAM_LABELS = tool.STREAM_LABELS
 # Voices of the other side told apart while it happens: each phrase's voice embedding is compared
 # with the voices heard so far. Measured on three AMI meetings (4 people each, reference speaker
 # timing; phrases labelled in time order with only what came before): threshold 0.42 with a new
@@ -281,7 +280,9 @@ class LiveSession:
         self.txt_file = open(self.txt_path, "w", encoding="utf-8")
         self.paragraphs = tool.ParagraphWriter(self.txt_file)
         self.wav = wave.open(self.wav_path, "wb")
-        self.wav.setnchannels(2)  # left: microphone after the gain, right: computer sound
+        # A call: left the microphone after the gain, right the computer sound (the full processing
+        # tells your words by these channels). One stream only (a room): mono.
+        self.wav.setnchannels(2 if len(self.streams) >= 2 else 1)
         self.wav.setsampwidth(2)
         self.wav.setframerate(RATE)
         self.worker = threading.Thread(target=self.work_loop, daemon=True)
@@ -368,9 +369,12 @@ class LiveSession:
             computer = np.clip(computer, -1.0, 1.0)
         left = microphone if microphone is not None else np.zeros(length, np.float32)
         right = computer if computer is not None else np.zeros(length, np.float32)
-        stereo = np.empty(length * 2, np.float32)
-        stereo[0::2], stereo[1::2] = left, right
-        self.wav.writeframes((stereo * 32767).astype(np.int16).tobytes())
+        if len(self.streams) >= 2:
+            frames = np.empty(length * 2, np.float32)
+            frames[0::2], frames[1::2] = left, right
+        else:
+            frames = left if "mic" in self.streams else right
+        self.wav.writeframes((frames * 32767).astype(np.int16).tobytes())
         self.recorded += length
         if microphone is not None and "mic" in self.streams:
             self.add_sound(self.streams["mic"], microphone.astype(np.float32))
