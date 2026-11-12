@@ -233,6 +233,25 @@ def run_local(url: str, prompt: str, transcript: str, report) -> str:
                       "original timestamps; treat them as the transcript.\n\n" + joined, context)
 
 
+def local_chunk_chars() -> int:
+    return load_settings().getint("local", "chunk_chars", fallback=LOCAL_CHUNK_CHARS)
+
+
+def run_single(engine: str, location: str, prompt: str, text: str) -> str:
+    """One request, without splitting the text (the caller splits it if needed)."""
+    if engine == "claude":
+        return run_claude(location, prompt, text)
+    if engine == "codex":
+        return run_codex(location, prompt, text)
+    settings = load_settings()
+    models = local_models(location)
+    model = settings.get("local", "model", fallback=None) or (models[0] if models else None)
+    if not model:
+        raise RuntimeError(f"no model available at {location}")
+    return local_chat(location, model, prompt, text,
+                      settings.getint("local", "context", fallback=LOCAL_CONTEXT_TOKENS))
+
+
 def run(engine: str, location: str, prompt: str, transcript: str, report=print) -> str:
     if engine == "claude":
         return run_claude(location, prompt, transcript)

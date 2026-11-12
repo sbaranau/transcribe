@@ -37,6 +37,7 @@ import threading
 import time
 
 import ai_engines
+import checker
 
 TOOL_DIR = os.path.dirname(os.path.abspath(__file__))  # app\: code, prompts, models
 ROOT_DIR = os.path.dirname(TOOL_DIR)  # the folder people open: scripts, guides, terms.txt
@@ -604,8 +605,8 @@ def transcribe_file(model, path: str, args) -> str:
     return txt_path
 
 
-def summarize(txt_path: str, args) -> bool:
-    summary_path = os.path.splitext(txt_path)[0] + ".summary.md"
+def summarize(txt_path: str, args, summary_path: str | None = None) -> bool:
+    summary_path = summary_path or os.path.splitext(txt_path)[0] + ".summary.md"
     if os.path.exists(summary_path) and not args.force:
         print(f"Summary exists, kept: {summary_path} (--force redoes it)", flush=True)
         return True
@@ -626,9 +627,8 @@ def summarize(txt_path: str, args) -> bool:
         print(f"Summary FAILED: {error}", file=sys.stderr)
         return False
 
-    title = os.path.splitext(os.path.basename(txt_path))[0]
     with open(summary_path, "w", encoding="utf-8") as summary_file:
-        summary_file.write(f"<!-- Summary of {title}.txt, made by {ai_engines.TITLES[engine]}; "
+        summary_file.write(f"<!-- Summary of {os.path.basename(txt_path)}, made by {ai_engines.TITLES[engine]}; "
                            f"check it against the transcript. -->\n\n")
         summary_file.write(text + "\n")
     print(f"Summary done in {format_clock(time.time() - started)}: {summary_path}", flush=True)
@@ -637,7 +637,8 @@ def summarize(txt_path: str, args) -> bool:
 
 def choose_ai(args, interactive: bool) -> bool:
     """Sets args.ai_engine and args.ai_location. Asks when interactive; otherwise takes --ai or
-    the first installed one. Returns False if there is none (the summary is then skipped)."""
+    the first installed one. Returns False if there is none (the check and the summary are
+    then skipped)."""
     found = ai_engines.find_engines()
     if args.ai:
         if args.ai in found:
@@ -651,21 +652,21 @@ def choose_ai(args, interactive: bool) -> bool:
         return True
     if found:
         engines = list(found)
-        choice = ask("Чем делать выжимку?",
+        choice = ask("Какой ИИ использовать?",
                      [f"{n} - {ai_engines.describe(e, found[e])}" for n, e in enumerate(engines, start=1)],
                      f"{ai_engines.TITLES[engines[0]]}", number_in(1, len(engines)))
         engine = engines[(choice or 1) - 1]
         args.ai_engine, args.ai_location = engine, found[engine]
         return True
     if not interactive:
-        print("No AI for the summary found (Claude Code, Codex, or a local model server); "
-              "the summary is skipped.", file=sys.stderr)
+        print("No AI found (Claude Code, Codex, or a local model server); the check and the "
+              "summary are skipped.", file=sys.stderr)
         return False
     print("\nНе найден ни Claude Code, ни Codex (ChatGPT), ни локальная модель (Ollama, LM Studio).")
     while True:
-        choice = ask("Что сделать?", ["1 - отменить выжимку (текст всё равно будет)",
+        choice = ask("Что сделать?", ["1 - отменить проверку и выжимку (текст всё равно будет)",
                                       "2 - указать путь к установленному ИИ"],
-                     "отменить выжимку", number_in(1, 2))
+                     "отменить", number_in(1, 2))
         if choice != 2:
             return False
         print("Путь к claude.exe или codex.cmd (можно папку с ним), или адрес локального сервера,\n"
@@ -738,14 +739,40 @@ def ask_options(args, has_media: bool) -> None:
             count = ask("Сколько человек говорит на записи?", ["1-20 - число говорящих"],
                         "не знаю, определить автоматически", number_in(1, 20))
             args.speakers = count or 0
+    labelled = args.speakers is not None if has_media else args.labelled_input
+    if labelled and not args.check:
+        choice = ask("Проверить текст с помощью ИИ? ИИ подставит имена вместо «Говорящий N», где люди\n"
+                     "представились или к ним обратились по имени, и исправит разорванные между\n"
+                     "говорящими фразы. Исходный текст сохранится, исправленный будет в <имя>.checked.txt.",
+                     ["1 - да", "2 - нет"], "нет", number_in(1, 2))
+        args.check = choice == 1
     if not args.summary:
-        choice = ask("Сделать выжимку с помощью ИИ? Текст расшифровки уйдёт в выбранный ИИ под "
-                     "вашим аккаунтом\n(у локальной модели останется на компьютере), поэтому только "
-                     "если ваши правила это разрешают.", ["1 - да", "2 - нет"], "нет", number_in(1, 2))
+        choice = ask("Сделать выжимку с помощью ИИ?", ["1 - да", "2 - нет"], "нет", number_in(1, 2))
         args.summary = choice == 1
-    if args.summary:
-        args.summary = choose_ai(args, interactive=True)
+    if args.check or args.summary:
+        print("\nДля проверки и выжимки текст расшифровки уйдёт в выбранный ИИ под вашим аккаунтом\n"
+              "(у локальной модели останется на компьютере), поэтому только если ваши правила это разрешают.")
+        if not choose_ai(args, interactive=True):
+            args.check = args.summary = False
     print()
+
+
+def after_transcript(txt_path: str, args) -> bool:
+    """The optional AI steps for a finished transcript: the check, then the summary (made from
+    the checked text when there is one). Returns False if a step failed."""
+    source, ok = txt_path, True
+    if args.check and not txt_path.endswith(".checked.txt"):
+        try:
+            checked = checker.check_file(txt_path, args.ai_engine, args.ai_location, args.force,
+                                         report=lambda line: print(line, flush=True))
+            source = checked or txt_path
+        except Exception as error:  # the AI failed or returned something unusable
+            print(f"Check FAILED: {error}", file=sys.stderr, flush=True)
+            ok = False
+    if args.summary:
+        base = txt_path[:-len(".checked.txt")] if txt_path.endswith(".checked.txt") else os.path.splitext(txt_path)[0]
+        ok = summarize(source, args, base + ".summary.md") and ok
+    return ok
 
 
 def main() -> int:
@@ -761,12 +788,16 @@ def main() -> int:
                              "omit to auto-detect from the first 30s")
     parser.add_argument("--speakers", nargs="?", type=int, const=0, default=None, metavar="N",
                         help="label who speaks (voice separation); N = number of speakers if known")
+    parser.add_argument("--check", action="store_true",
+                        help="with speaker labels: have an AI put in names and fix text with the "
+                             "wrong speaker, into <name>.checked.txt (sends the transcript to it, "
+                             "unless it is a local model)")
     parser.add_argument("--summary", action="store_true",
                         help="also write <name>.summary.md with an AI (sends the transcript to it, "
-                             "unless it is a local model)")
+                             "unless it is a local model); made from the checked text if there is one")
     parser.add_argument("--ai", choices=ai_engines.ENGINES, default=None,
-                        help="AI for the summary: claude (Claude Code), codex (ChatGPT via Codex "
-                             "CLI) or local (Ollama, LM Studio, ...); default: the first installed")
+                        help="AI for the check and the summary: claude (Claude Code), codex (ChatGPT "
+                             "via Codex CLI) or local (Ollama, LM Studio, ...); default: the first installed")
     parser.add_argument("--srt", action="store_true", help="also write .srt subtitles with exact timings")
     parser.add_argument("--out-dir", default=None, help="output folder (default: a subfolder named after each input, next to it)")
     parser.add_argument("--model", default=DEFAULT_MODEL,
@@ -802,18 +833,20 @@ def main() -> int:
 
     media = [p for p in args.inputs if not p.lower().endswith(".txt")]
     transcripts = [p for p in args.inputs if p.lower().endswith(".txt")]
+    args.labelled_input = any(checker.has_labels(open(p, encoding="utf-8").read()) for p in transcripts)
     if args.ask:
         ask_options(args, bool(media))
-    elif args.summary:
-        args.summary = choose_ai(args, interactive=False)
-        if not args.summary and transcripts:
-            return 1
+    elif args.check or args.summary:
+        if not choose_ai(args, interactive=False):
+            args.check = args.summary = False
+            if transcripts:
+                return 1
     if args.speakers is not None and media and not (
             os.path.isfile(SEGMENTATION_MODEL) and os.path.isfile(EMBEDDING_MODEL)):
         print("The voice separation models are missing. Run setup.cmd.", file=sys.stderr)
         return 3
-    if transcripts and not args.summary:
-        print("A .txt input is only summarized; add --summary.", file=sys.stderr)
+    if transcripts and not (args.summary or args.check):
+        print("A .txt input is only checked or summarized; add --check or --summary.", file=sys.stderr)
         return 2
 
     # Recordings already transcribed are not done again, so a corrected .txt is never lost;
@@ -828,7 +861,7 @@ def main() -> int:
         if args.srt and not os.path.isfile(output_base(path, args.out_dir) + ".srt"):
             print("  No .srt for it: subtitles are made only together with the transcript; "
                   "use --force to make both.", flush=True)
-        if args.summary:
+        if args.summary or args.check:
             transcripts.append(txt_path)
 
     failures = 0
@@ -873,12 +906,12 @@ def main() -> int:
                 print(f"FAILED: {error}", file=sys.stderr, flush=True)
         if txt_path is None:
             failures += 1
-        elif args.summary and not summarize(txt_path, args):
+        elif not after_transcript(txt_path, args):
             failures += 1
 
     for path in transcripts:
         print(f"\n{path}", flush=True)
-        if not summarize(path, args):
+        if not after_transcript(path, args):
             failures += 1
 
     return 1 if failures else 0

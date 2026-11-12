@@ -52,9 +52,10 @@ Drag recordings in Explorer onto `drop-files-here.cmd` (or double-click it and d
 the window). It writes `<name>.txt` and `<name>.srt` and asks, in Russian, with numbered answers
 (Enter = "don't know" / "no"): the language (Russian, English, German, French, several
 languages, or detect), whether to separate speakers and how many there are (or estimate),
-whether to make a summary, and with which of the AI tools found on the computer.
+whether an AI should check the text (only with speakers), whether to make a summary, and, if
+either is wanted, which of the AI tools found on the computer to use.
 
-If no AI is found, it offers to skip the summary (the transcript is made anyway) or to enter
+If no AI is found, it offers to skip the check and summary (the transcript is made anyway) or to enter
 the path to `claude.exe` / `codex.cmd` (or their folder) or the address of a local model server.
 A working path is stored in `app\ai.local.ini` (not in git) and found again next time; delete the
 file to search afresh.
@@ -67,16 +68,16 @@ Or from a terminal:
 
 ```
 C:\bin\transcribe\transcribe.cmd "meeting.mp4" --language ru
-C:\bin\transcribe\transcribe.cmd "meeting.mp4" --language ru --speakers 3 --summary --srt
+C:\bin\transcribe\transcribe.cmd "meeting.mp4" --language ru --speakers 3 --check --summary --srt
 C:\bin\transcribe\transcribe.cmd "meeting.mp4" --ask             (the questions, as when dragging)
-C:\bin\transcribe\transcribe.cmd "meeting.txt" --summary        (summarize an existing transcript)
+C:\bin\transcribe\transcribe.cmd "meeting.txt" --check --summary (check and summarize an existing transcript)
 C:\bin\transcribe\transcribe.cmd --help
 ```
 
 Options: `--language ru|de|en|...|multi` (default: detected from the first 30 seconds; `multi`
 detects the language for every 30-second window), `--speakers [N]` (label speakers; N if the
-number is known), `--ask`, `--summary`, `--ai claude|codex|local` (default: the first one
-found), `--srt`, `--terms FILE`, `--no-terms`, `--no-filter`, `--out-dir DIR`, `--cpu`,
+number is known), `--ask`, `--check`, `--summary`, `--ai claude|codex|local` (default: the
+first one found), `--srt`, `--terms FILE`, `--no-terms`, `--no-filter`, `--out-dir DIR`, `--cpu`,
 `--model`, `--force`.
 
 ## Summary AI
@@ -91,6 +92,26 @@ can be set (16,384 tokens); `app\ai.local.ini` `[local]` takes `model`, `chunk_c
 `context`.
 Tested: Claude and ChatGPT (Codex CLI 0.167) on a synthetic meeting; the local path against
 fake Ollama- and LM Studio-style servers only.
+
+## Text check
+
+`--check` (with speaker labels only) has the AI put in names and fix text with the wrong
+speaker, into `<name>.checked.txt`; the summary is then made from that file. The AI does not
+rewrite the transcript: it returns JSON (`app\check_prompt.md`) with names per label (sure or
+not) and fixes, each a quote from one paragraph plus the label of the person who really said
+it. `app\checker.py` applies them: a quote must be found in that paragraph word for word (any
+whitespace), otherwise the fix is dropped; the paragraph is split around it; then neighbouring
+pieces with the same speaker are joined when the first does not end a sentence, which repairs
+sentences cut between two labels. Labels become names ("Name (?)" when not sure); a name given
+to two labels is used for neither. The words, their order and the timestamps never change,
+`<name>.txt` stays as it was, and the first line of the checked file lists what was applied.
+Cloud AIs get the whole transcript at once (up to 200,000 characters per request), local models
+parts of `chunk_chars`.
+
+Tested on a synthetic meeting with the typical mistakes (a question cut between two labels, the
+end of a turn given to the next speaker, a question inside someone else's answer, names given
+by introduction and by address): Claude and ChatGPT both found all of them and the three names;
+bad suggestions (quote not in the text, unknown label, wrong timestamp) are skipped.
 
 ## Speakers
 
@@ -171,7 +192,8 @@ For a `.txt` input, the summary is written next to that `.txt`.
   are a second or more apart, so a subtitle or paragraph never spans a long pause. Players pick them up automatically only
   from the recording's folder, so load them by hand (VLC: Subtitle > Add Subtitle File), or move
   the `.srt` next to the recording.
-- `<name>.summary.md`: In short, Main ideas (every idea, proposal, argument and number, grouped
+- `<name>.checked.txt` (with `--check`): the transcript with names and corrected speaker labels.
+- `<name>.summary.md` (made from the checked text if there is one): In short, Main ideas (every idea, proposal, argument and number, grouped
   by topic), Decisions, Tasks (what, who, due, timestamp), Dates and deadlines (every date
   reference, relative ones kept as said), Open questions, Topics by time. Every bullet has a
   timestamp; empty sections are left out except the dates. Written entirely in the meeting's
@@ -195,7 +217,8 @@ The top level holds only what people start or read; everything else is in `app\`
 | `ИНСТРУКЦИЯ.md`, `README.md` | user guide in Russian, this file |
 | `terms.txt` | your terms for Whisper (optional, not in git) |
 | `app\transcribe.py` | the tool |
-| `app\ai_engines.py` | finding and calling the summary AI |
+| `app\ai_engines.py` | finding and calling the AI for the check and the summary |
+| `app\checker.py`, `app\check_prompt.md` | the text check: applying the AI's findings; the instructions it gets |
 | `app\summary_prompt.md` | the instructions the AI gets for the summary |
 | `app\summary_notes_prompt.md` | notes per part of a long transcript, for local models |
 | `app\download_models.py`, `app\send_to_menu.py` | model download, Send To shortcut |
