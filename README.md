@@ -1,7 +1,8 @@
 # transcribe
 
-Turns meeting recordings (video or audio) into a full, readable transcript and, on request,
-a structured summary.
+Turns recordings of any meeting (video or audio: meetings, calls, interviews, webinars,
+lectures) into a full, readable transcript and, on request, a dense summary that keeps every
+idea, task and date.
 
 - **Transcript**: runs locally with Whisper (`faster-whisper`, model `large-v3-turbo`) on the
   NVIDIA GPU, or on the CPU if no GPU is available. Nothing leaves the machine. A 3-hour
@@ -18,10 +19,20 @@ runs the tool, and calls it with `--tools "" --strict-mcp-config --setting-sourc
 --no-session-persistence` from this folder, so that person's own settings, hooks and MCP
 servers stay out and no session keeps the transcript.
 
-To share the tool, give out the package from `make-package.cmd` (scripts only, ~30 KB); each
-person runs `setup.cmd`. Do not copy `python\` or `venv\`: the environment is bound to its
-folder path, so after moving the folder run `setup.cmd` again. A Russian guide is in
-`ИНСТРУКЦИЯ.md`.
+## Install and update
+
+Needs Windows, `git` and [`uv`](https://docs.astral.sh/uv/) (`winget install --id Git.Git`,
+`winget install --id astral-sh.uv`):
+
+```
+git clone https://github.com/sbaranau/transcribe.git C:\bin\transcribe
+C:\bin\transcribe\setup.cmd
+```
+
+`setup.cmd` puts a private Python 3.12, the packages (with the NVIDIA CUDA libraries) and the
+Whisper model into the folder, about 3 GB. Update with `git -C C:\bin\transcribe pull`, and run
+`setup.cmd` again when `requirements.txt` changed. The environment is bound to its folder path:
+after moving the folder, run `setup.cmd` again. A Russian guide is in `ИНСТРУКЦИЯ.md`.
 
 ## Usage
 
@@ -68,12 +79,11 @@ dropped. The tool prints what it removed (`Filtered: ...`); `--no-filter` keeps 
 
 ## Terms
 
-Names and jargon Whisper should spell right go one per line into `terms.txt` (shared with the
-team through the package) or `terms.local.txt` (personal, e.g. colleague names; never
-packaged). Neither is in git, so company terms never reach the repository; create them next to
-`transcribe.py`. Both are optional; `--terms FILE` adds a
-file for one meeting. They are passed to Whisper as `hotwords` for every 30-second window,
-most specific first: `--terms` files, then `terms.local.txt`, then `terms.txt`. Whisper reads
+Names and jargon Whisper should spell right go one per line into `terms.txt` next to
+`transcribe.py` (optional). It is not in git, so company product names and colleague names
+never reach the repository; to share it, send the file. `--terms FILE` adds a file for one
+meeting. The terms are passed to Whisper as `hotwords` for every 30-second window, `--terms`
+files first, then `terms.txt`. Whisper reads
 at most 223 tokens (roughly 60-100 terms) and drops the rest; the tool prints the token count
 and warns when the list is too long. Add only terms that actually come out wrong: hints for
 words that are never said can occasionally leak into the text.
@@ -91,10 +101,12 @@ For a `.txt` input, the summary is written next to that `.txt`.
 - `<name>.srt`: subtitles with exact segment timings. Players pick them up automatically only
   from the recording's folder, so load them by hand (VLC: Subtitle > Add Subtitle File), or move
   the `.srt` next to the recording.
-- `<name>.summary.md`: In short, Decisions, Agreements and tasks, Open questions and risks,
-  Key facts, Course of the meeting, all with timestamps; written entirely in the meeting's
-  language, headings included. Check it against the transcript before
-  passing it on. The prompt is in `summary_prompt.md`.
+- `<name>.summary.md`: In short, Main ideas (every idea, proposal, argument and number, grouped
+  by topic), Decisions, Tasks (what, who, due, timestamp), Dates and deadlines (every date
+  reference, relative ones kept as said), Open questions, Topics by time. Every bullet has a
+  timestamp; empty sections are left out except the dates. Written entirely in the meeting's
+  language, headings included, without introductions or repetition. Check it against the
+  transcript before passing it on. The prompt is in `summary_prompt.md`.
 
 Speakers are not labelled, and recognition makes mistakes with names and technical terms.
 
@@ -104,13 +116,11 @@ Speakers are not labelled, and recognition makes mistakes with names and technic
 |---|---|
 | `transcribe.py` | the tool |
 | `summary_prompt.md` | the instructions Claude gets for the summary |
-| `terms.txt` | shared terms for Whisper (optional; packaged, not in git) |
-| `terms.local.txt` | personal terms (optional, not packaged) |
+| `terms.txt` | your terms for Whisper (optional, not in git) |
 | `requirements.txt` | pinned packages (`av` must stay below 15 for faster-whisper 1.2.1) |
 | `python\` | private Python 3.12 (installed by uv) |
 | `venv\` | virtual environment with the packages and the NVIDIA CUDA libraries |
 | `models\large-v3-turbo\` | the Whisper model, so it works offline |
 | `setup.cmd` | rebuilds `python\`, `venv\` and `models\`, e.g. on another machine; needs `uv`; asks about the Send To menu |
 | `send-to-menu.cmd`, `send_to_menu.py` | add or remove the Send To menu entries |
-| `make-package.cmd` | writes `transcribe-package.zip` next to this folder, with the scripts and guides only |
 | `ИНСТРУКЦИЯ.md` | user guide in Russian |

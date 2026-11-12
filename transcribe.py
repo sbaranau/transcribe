@@ -20,8 +20,7 @@ overwrites them. The transcript is written to a .partial file first, so an inter
 leaves no incomplete <name>.txt behind.
 
 Terms (names, products, jargon) that Whisper should spell right are read, one per line, from
-terms.txt (shared with the team) and terms.local.txt (personal, never packaged) in the tool
-folder, plus any --terms FILE. They are passed to Whisper as hotwords for every 30-second window.
+--terms FILE and from terms.txt in the tool folder (local, not in git). They are passed to Whisper as hotwords for every 30-second window.
 """
 import argparse
 import glob
@@ -36,7 +35,7 @@ TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_MODEL = os.path.join(TOOL_DIR, "models", "large-v3-turbo")
 SUMMARY_PROMPT_FILE = os.path.join(TOOL_DIR, "summary_prompt.md")
 # Most specific first: when the list is too long, Whisper drops the terms at the end.
-DEFAULT_TERMS_FILES = [os.path.join(TOOL_DIR, "terms.local.txt"), os.path.join(TOOL_DIR, "terms.txt")]
+DEFAULT_TERMS_FILES = [os.path.join(TOOL_DIR, "terms.txt")]
 # faster-whisper keeps at most max_length // 2 - 1 = 223 hotword tokens and silently drops the rest.
 HOTWORDS_TOKEN_LIMIT = 223
 
@@ -334,7 +333,7 @@ def main() -> int:
     parser.add_argument("--cpu", action="store_true", help="force CPU even if a GPU is available")
     parser.add_argument("--terms", action="append", default=[], metavar="FILE",
                         help="extra terms file, one term per line; can be given several times "
-                             "(terms.txt and terms.local.txt in the tool folder are always read)")
+                             "(terms.txt in the tool folder is always read)")
     parser.add_argument("--no-terms", action="store_true", help="use no terms at all")
     parser.add_argument("--no-filter", action="store_true",
                         help="keep everything Whisper outputs, including likely hallucinations "

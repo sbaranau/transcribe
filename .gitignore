@@ -4,8 +4,7 @@
 /models/
 __pycache__/
 
-# Terms dictionaries hold team- or company-specific names: they stay local. terms.txt goes
-# into the team package (make-package.cmd), *.local.txt nowhere.
+# The terms dictionary holds company and colleague names: it stays local.
 /terms.txt
 *.local.txt
 
