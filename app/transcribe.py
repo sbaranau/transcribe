@@ -784,8 +784,11 @@ def after_transcript(txt_path: str, args) -> bool:
     return ok
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Offline speech-to-text for meeting recordings.")
+    parser.add_argument("--live", action="store_true",
+                        help="transcribe a meeting while it happens, from the computer's sound and "
+                             "the microphone (live-transcribe.cmd); Enter stops it")
     parser.add_argument("inputs", nargs="*",
                         help="audio/video files (mp4, mkv, mp3, wav, m4a, ...) or existing .txt "
                              "transcripts; without any, the tool asks for them")
@@ -822,8 +825,11 @@ def main() -> int:
     parser.add_argument("--force", action="store_true",
                         help="overwrite existing results (by default a recording whose .txt exists "
                              "is not transcribed again, and an existing summary is kept)")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     args.ai_engine = args.ai_location = None
+    if args.live:
+        import live
+        return live.run(args)
 
     if not args.inputs:
         if not args.ask:

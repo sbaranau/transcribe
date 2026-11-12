@@ -60,7 +60,10 @@ the path to `claude.exe` / `codex.cmd` (or their folder) or the address of a loc
 A working path is stored in `app\ai.local.ini` (not in git) and found again next time; delete the
 file to search afresh.
 
-Optionally the same script is in the Explorer **Send To** menu (right-click a recording, Send
+**Live**: `live-transcribe.cmd` transcribes a meeting while it happens, without a video
+recording; see "Live mode" below.
+
+Optionally the drop script is in the Explorer **Send To** menu (right-click a recording, Send
 To, "Расшифровать"). `setup.cmd` asks whether to add it; `send-to-menu.cmd add|remove|status`
 changes it later. Only the tool's own shortcut in the user's SendTo folder is touched.
 
@@ -81,6 +84,26 @@ detects the language for every 30-second window), `--speakers [N]` (label speake
 number is known), `--ask`, `--check`, `--summary`, `--ai claude|codex|local` (default: the
 first one found), `--srt`, `--terms FILE`, `--no-terms`, `--no-filter`, `--out-dir DIR`, `--cpu`,
 `--model`, `--force`.
+
+## Live mode
+
+`live-transcribe.cmd` (`app\transcribe.cmd --live --ask`, code in `app\live.py`) listens to the
+default microphone and, through WASAPI loopback, to every output device (so the other side of a
+Teams or Zoom call is heard whichever device the call plays on), with
+[soundcard](https://github.com/bastibe/SoundCard) (BSD-3-Clause). Each device is read in its own
+thread in 0.25 s blocks; the microphone sets the pace, a loopback block that is not there yet is
+silence (loopback delivers zeros on time when nothing plays), a device that fails is dropped. The
+mix goes to `meeting.wav` (16 kHz mono) and is cut into pieces of 8-25 s at the quietest moment
+near a pause; silent pieces are skipped. A worker thread transcribes the pieces with the same
+Whisper settings and filter as files and writes `meeting.live.txt` and the console. Enter stops
+it; the rest is transcribed. Then it offers to process `meeting.wav` in full with the usual
+questions (speakers, check, summary), or to summarize the live text, and asks whether to keep
+the sound. Default folder: `Documents\Transcripts\<yyyy-mm-dd hh-mm>`, or `--out-dir`.
+
+Tested with speech played through the speakers (33 s, eight sentences): every sentence came out
+right, 2-8 s after it was said, and the full processing ran. Not yet tested: a real call, a
+long meeting, a computer without an NVIDIA GPU. Speakers are separated only in the full
+processing afterwards; participants should be told that the meeting is transcribed.
 
 ## Summary AI
 
@@ -213,12 +236,14 @@ The top level holds only what people start or read; everything else is in `app\`
 | Path | Content |
 |---|---|
 | `drop-files-here.cmd` | drag-and-drop entry point with the questions |
+| `live-transcribe.cmd` | live transcription during a meeting |
 | `setup.cmd` | installs `uv` with winget if missing; builds `app\python\`, `app\venv\` and `app\models\`, e.g. on another machine; asks about the Send To menu; moves an old top-level layout into `app\` |
 | `send-to-menu.cmd` | add or remove the Send To menu entry |
 | `ИНСТРУКЦИЯ.md`, `README.md` | user guide in Russian, this file |
 | `terms.txt` | your terms for Whisper (optional, not in git) |
 | `app\transcribe.cmd` | command-line entry point |
 | `app\transcribe.py` | the tool |
+| `app\live.py` | live mode: capture, mixing, transcription in pieces |
 | `app\ai_engines.py` | finding and calling the AI for the check and the summary |
 | `app\checker.py`, `app\check_prompt.md` | the text check: applying the AI's findings; the instructions it gets |
 | `app\summary_prompt.md` | the instructions the AI gets for the summary |

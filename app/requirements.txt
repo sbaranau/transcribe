@@ -8,3 +8,7 @@ nvidia-cudnn-cu12==9.28.1.4
 # Voice separation (speaker diarization), CPU only; Apache-2.0. Added 2026-11-12.
 sherpa-onnx==2.0.1
 sherpa-onnx-core==2.0.1
+# Live mode: capture of the computer's sound (WASAPI loopback) and the microphone; BSD-3-Clause.
+soundcard==0.4.6
+cffi==2.1.1
+pycparser==3.12
