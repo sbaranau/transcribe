@@ -10,3 +10,6 @@ __pycache__/
 
 # Left by an interrupted transcription.
 *.partial
+
+# Where the AI for summaries was found (paths entered by the user).
+ai.local.ini

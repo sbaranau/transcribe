@@ -10,17 +10,21 @@ idea, task and date.
 - **Speakers** (optional): voice separation with [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)
   (pyannote segmentation 3.0 + NVIDIA NeMo TitaNet-small embeddings) on the CPU, in parallel
   with Whisper, labels paragraphs "Speaker 1", "Speaker 2", ... (in the meeting's language).
-- **Summary**: made by Claude Code (`claude -p`) under your own account. It sends the transcript
-  to Claude, so it is only for meetings whose content the rules you use Claude under allow (your
-  organization's AI usage rules for a work account, and Anthropic's terms): typically no
-  personal data beyond what is needed and never health or other special categories, no
-  credentials, no confidential client material. Anything else gets the local transcript only.
+- **Summary**: made by an AI the user has installed, chosen at the start: Claude Code
+  (`claude -p`), ChatGPT through the OpenAI Codex CLI (`codex exec`), or a local model server
+  with an OpenAI-style API (Ollama, LM Studio, Jan, llama.cpp, ...). Claude and ChatGPT get the
+  transcript under the user's account, so the summary is only for meetings whose content the
+  rules the user works under allow (the organization's AI usage rules for a work account, and
+  the provider's terms): typically no personal data beyond what is needed and never health or
+  other special categories, no credentials, no confidential client material. A local model
+  keeps the text on the computer. Anything else gets the local transcript only.
 
-Nothing is tied to one person's account. The transcript needs no account, and the model is
-downloaded from Hugging Face without login. The summary uses the Claude Code login of whoever
-runs the tool, and calls it with `--tools "" --strict-mcp-config --setting-sources project
---no-session-persistence` from this folder, so that person's own settings, hooks and MCP
-servers stay out and no session keeps the transcript.
+Nothing is tied to one person's account. The transcript needs no account, and the models are
+downloaded without login. The summary uses the login of whoever runs the tool, with that
+person's own setup kept out (`ai_engines.py`): Claude Code with `--tools "" --strict-mcp-config
+--setting-sources project --no-session-persistence`, Codex with `--ignore-user-config
+--ignore-rules --ephemeral --sandbox read-only` in an empty folder; no session keeps the
+transcript.
 
 ## Install and update
 
@@ -43,8 +47,13 @@ after moving the folder, run `setup.cmd` again. A Russian guide is in `ИНСТ�
 Drag recordings in Explorer onto `drop-files-here.cmd` (or double-click it and drag a file into
 the window). It writes `<name>.txt` and `<name>.srt` and asks, in Russian, with numbered answers
 (Enter = "don't know" / "no"): the language (Russian, English, German, French, several
-languages, or detect), whether to separate speakers and how many there are (or estimate), and
-whether to make a summary with Claude.
+languages, or detect), whether to separate speakers and how many there are (or estimate),
+whether to make a summary, and with which of the AI tools found on the computer.
+
+If no AI is found, it offers to skip the summary (the transcript is made anyway) or to enter
+the path to `claude.exe` / `codex.cmd` (or their folder) or the address of a local model server.
+A working path is stored in `ai.local.ini` (not in git) and found again next time; delete the
+file to search afresh.
 
 Optionally the same script is in the Explorer **Send To** menu (right-click a recording, Send
 To, "Расшифровать"). `setup.cmd` asks whether to add it; `send-to-menu.cmd add|remove|status`
@@ -62,8 +71,21 @@ C:\bin\transcribe\transcribe.cmd --help
 
 Options: `--language ru|de|en|...|multi` (default: detected from the first 30 seconds; `multi`
 detects the language for every 30-second window), `--speakers [N]` (label speakers; N if the
-number is known), `--ask`, `--summary`, `--srt`, `--terms FILE`, `--no-terms`, `--no-filter`,
-`--out-dir DIR`, `--cpu`, `--model`, `--force`.
+number is known), `--ask`, `--summary`, `--ai claude|codex|local` (default: the first one
+found), `--srt`, `--terms FILE`, `--no-terms`, `--no-filter`, `--out-dir DIR`, `--cpu`,
+`--model`, `--force`.
+
+## Summary AI
+
+`ai_engines.py` finds the AI tools (Claude Code and Codex on PATH or at a remembered path;
+local servers at a remembered address or the default ports 11434 for Ollama and 1234 for LM
+Studio) and calls them. Everything goes through stdin, so no transcript text passes a command
+line. Local models get the transcript at once if it is up to 20,000 characters; a longer one is
+cut into parts at paragraph ends, each part is turned into notes (`summary_notes_prompt.md`), and
+the summary is made from the notes. For Ollama the native API is used so the context window can
+be set (16,384 tokens); `ai.local.ini` `[local]` takes `model`, `chunk_chars` and `context`.
+Tested: Claude and ChatGPT (Codex CLI 0.167) on a synthetic meeting; the local path against
+fake Ollama- and LM Studio-style servers only.
 
 ## Speakers
 
@@ -82,6 +104,9 @@ How the speakers are found (`diarize`, `refine_speakers`):
    alike person, except, when the number of speakers is given, that many of the most talkative
    persons (so someone who joined late or said little stays separate).
 4. With a given number, the most alike persons are joined until that number is left.
+5. Inside every turn longer than 3 s, the voice is checked every 0.75 s over 1.5 s windows; a
+   stretch at least 0.2 more alike another person's average voice goes to that person
+   (`check_voice_inside_turns`). This splits off short interjections the segmentation missed.
 
 sherpa-onnx's own fixed-count mode is not used: on the 4-person recording it merged two people
 and kept a 0.4% noise group. Measured: on that recording the steps give 4 persons (61, 20, 10,
@@ -90,8 +115,14 @@ and kept a 0.4% noise group. Measured: on that recording the steps give 4 person
 from 0.70 to 0.75 gave the same 4 persons; different people on the reference recordings are
 0.12-0.43 alike. TitaNet-small was chosen over WeSpeaker ResNet34, CAM++ and ERes2Net, which
 counted the reference speakers worse; a segmentation window shift of 0.25 instead of 0.1 gave
-the same counts at about a third of the time. Still, give the number when it is known, and
-check the labels where people talk at once.
+the same counts at about a third of the time.
+
+Word-level accuracy against reference speaker timing, on three AMI meetings (ES2004a, IS1009a,
+TS3003a; 4 people each, 55 minutes): with the number of speakers given, 98.2% of the words go to
+the right person, and 88.7% of the words in turns under 2 s (82.1% without step 5). Without the
+number, 97.6% and 87.7%; on TS3003a two people were joined. Tried and dropped: window shift
+0.1 (no better, twice as slow) and joining thresholds of 0.75-0.85 (worse). Give the number
+when it is known, and check the labels where people talk at once.
 
 Existing results are kept: a recording whose `<name>.txt` exists is not transcribed again (so
 hand corrections survive; with `--summary` only a missing summary is made from that `.txt`),
@@ -140,7 +171,8 @@ For a `.txt` input, the summary is written next to that `.txt`.
   reference, relative ones kept as said), Open questions, Topics by time. Every bullet has a
   timestamp; empty sections are left out except the dates. Written entirely in the meeting's
   language, headings included, without introductions or repetition. Check it against the
-  transcript before passing it on. The prompt is in `summary_prompt.md`.
+  transcript before passing it on. The prompt is in `summary_prompt.md`; the first line names
+  the AI that made it.
 
 Recognition makes mistakes with names and technical terms, and the speaker labels with
 overlapping speech, similar voices and people who say very little.
@@ -150,7 +182,10 @@ overlapping speech, similar voices and people who say very little.
 | Path | Content |
 |---|---|
 | `transcribe.py` | the tool |
-| `summary_prompt.md` | the instructions Claude gets for the summary |
+| `ai_engines.py` | finding and calling the summary AI |
+| `summary_prompt.md` | the instructions the AI gets for the summary |
+| `summary_notes_prompt.md` | notes per part of a long transcript, for local models |
+| `ai.local.ini` | where the summary AI was found, if a path was entered (not in git) |
 | `terms.txt` | your terms for Whisper (optional, not in git) |
 | `requirements.txt` | pinned packages (`av` must stay below 15 for faster-whisper 1.2.1) |
 | `python\` | private Python 3.12 (installed by uv) |

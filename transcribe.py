@@ -9,7 +9,8 @@ For each audio/video input it writes, into a subfolder named <name> next to the 
     <name>.txt          full transcript in paragraphs, each starting with [hh:mm:ss] and, with
                         --speakers, the speaker label
     <name>.srt          subtitles timed by the spoken words (with --srt)
-    <name>.summary.md   structured summary made by Claude Code (with --summary)
+    <name>.summary.md   structured summary made by an AI (with --summary): Claude Code, ChatGPT
+                        through the Codex CLI, or a local model server (see ai_engines.py)
 
 Transcription runs locally (NVIDIA GPU when available, CPU otherwise); nothing leaves the
 machine. Only --summary sends the transcript to Claude, under your own account, so use it only
@@ -30,11 +31,11 @@ import bisect
 import glob
 import os
 import re
-import shutil
-import subprocess
 import sys
 import threading
 import time
+
+import ai_engines
 
 TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_MODEL = os.path.join(TOOL_DIR, "models", "large-v3-turbo")
@@ -89,6 +90,12 @@ SPEAKER_THRESHOLD = 0.85
 # value from 0.55 to 0.8 (different people there: 0.12-0.43).
 SAME_PERSON_SIMILARITY = 0.72
 CENTROID_SECONDS = 30.0
+PERSON_CENTROID_SECONDS = 60.0
+# Voice check inside long turns, see check_voice_inside_turns().
+INSIDE_MIN_TURN = 3.0
+INSIDE_WINDOW = 1.5
+INSIDE_HOP = 0.75
+INSIDE_MARGIN = 0.2
 # Persons with less of the speech than this after joining are fragments and are folded into the
 # most alike larger person.
 MIN_SPEAKER_SHARE = 0.02
@@ -433,6 +440,53 @@ def refine_speakers(audio, turns: list[tuple[float, float, int]], num_speakers: 
             result.append((start, end, person_of[nearest[2]]))
         else:
             result.append((start, end, group))
+    return check_voice_inside_turns(result, embed)
+
+
+def check_voice_inside_turns(turns: list[tuple[float, float, int]], embed
+                             ) -> list[tuple[float, float, int]]:
+    """Short interjections inside someone else's long turn ("wait, how many?") are often not
+    split off by the segmentation. Inside every turn longer than INSIDE_MIN_TURN seconds, the
+    voice is checked every INSIDE_HOP seconds over INSIDE_WINDOW seconds; a stretch that is
+    clearly (INSIDE_MARGIN) more alike another person goes to that person.
+    Measured on three AMI meetings (4 people each, reference speaker timing): words in turns
+    under 2 s went from 82% to 89% right with the number of speakers given, all words stayed
+    at 98%."""
+    import numpy as np
+
+    centroids = {}
+    for person in {speaker for _, _, speaker in turns}:
+        vectors, used = [], 0.0
+        for start, end, _ in sorted((t for t in turns if t[2] == person), key=lambda t: t[0] - t[1]):
+            if end - start < 1.0 or used >= PERSON_CENTROID_SECONDS:
+                break
+            end = min(end, start + 10.0)
+            vectors.append(embed(start, end))
+            used += end - start
+        if vectors:
+            centroid = np.mean(vectors, axis=0)
+            centroids[person] = centroid / np.linalg.norm(centroid)
+    if len(centroids) < 2:
+        return turns
+
+    result = []
+    for start, end, speaker in turns:
+        pieces = [(start, end, speaker)]
+        if end - start >= INSIDE_MIN_TURN and speaker in centroids:
+            pieces, position = [], start
+            while position < end:
+                step_end = min(end, position + INSIDE_HOP)
+                window_start = max(start, (position + step_end) / 2 - INSIDE_WINDOW / 2)
+                vector = embed(window_start, min(end, window_start + INSIDE_WINDOW))
+                best = max(centroids, key=lambda person: float(centroids[person] @ vector))
+                clearly_other = float(centroids[best] @ vector) - float(centroids[speaker] @ vector)
+                pieces.append((position, step_end, best if clearly_other > INSIDE_MARGIN else speaker))
+                position = step_end
+        for piece in pieces:
+            if result and result[-1][2] == piece[2] and abs(result[-1][1] - piece[0]) < 1e-6:
+                result[-1] = (result[-1][0], piece[1], piece[2])
+            else:
+                result.append(piece)
     return result
 
 
@@ -548,57 +602,83 @@ def transcribe_file(model, path: str, args) -> str:
     return txt_path
 
 
-def find_claude() -> str | None:
-    found = shutil.which("claude")
-    if found:
-        return found
-    fallback = os.path.join(os.path.expanduser("~"), ".local", "bin", "claude.exe")
-    return fallback if os.path.isfile(fallback) else None
-
-
 def summarize(txt_path: str, args) -> bool:
     summary_path = os.path.splitext(txt_path)[0] + ".summary.md"
     if os.path.exists(summary_path) and not args.force:
         print(f"Summary exists, kept: {summary_path} (--force redoes it)", flush=True)
         return True
-    claude = find_claude()
-    if not claude:
-        print("Claude Code CLI (claude) not found; skipping the summary.", file=sys.stderr)
-        return False
-
+    engine, location = args.ai_engine, args.ai_location
     with open(SUMMARY_PROMPT_FILE, encoding="utf-8") as prompt_file:
         prompt = prompt_file.read()
     with open(txt_path, encoding="utf-8") as transcript_file:
         transcript = transcript_file.read()
 
-    print("Sending the transcript to Claude for the summary (your account; "
-          "your Claude usage rules apply)...", flush=True)
+    where = ("stays on this computer" if engine == "local"
+             else "goes to it under your account; your usage rules apply")
+    print(f"Summary with {ai_engines.describe(engine, location)}; the transcript {where}...", flush=True)
     started = time.time()
-    # Uses the Claude Code login of whoever runs the tool. The flags keep that person's own
-    # setup out of the call: no tools, no MCP servers, no user settings or hooks, and no saved
-    # session holding the transcript.
-    result = subprocess.run(
-        [claude, "-p", prompt,
-         "--tools", "",
-         "--strict-mcp-config",
-         "--setting-sources", "project",
-         "--no-session-persistence"],
-        input=transcript,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        cwd=TOOL_DIR,
-    )
-    if result.returncode != 0 or not result.stdout.strip():
-        print(f"Summary FAILED (exit {result.returncode}): {result.stderr.strip()}", file=sys.stderr)
+    try:
+        text = ai_engines.run(engine, location, prompt, transcript,
+                              report=lambda line: print(line, flush=True))
+    except Exception as error:  # the AI tool failed or is not logged in
+        print(f"Summary FAILED: {error}", file=sys.stderr)
         return False
 
     title = os.path.splitext(os.path.basename(txt_path))[0]
     with open(summary_path, "w", encoding="utf-8") as summary_file:
-        summary_file.write(f"<!-- Summary of {title}.txt, made by Claude; check it against the transcript. -->\n\n")
-        summary_file.write(result.stdout.strip() + "\n")
+        summary_file.write(f"<!-- Summary of {title}.txt, made by {ai_engines.TITLES[engine]}; "
+                           f"check it against the transcript. -->\n\n")
+        summary_file.write(text + "\n")
     print(f"Summary done in {format_clock(time.time() - started)}: {summary_path}", flush=True)
     return True
+
+
+def choose_ai(args, interactive: bool) -> bool:
+    """Sets args.ai_engine and args.ai_location. Asks when interactive; otherwise takes --ai or
+    the first installed one. Returns False if there is none (the summary is then skipped)."""
+    found = ai_engines.find_engines()
+    if args.ai:
+        if args.ai in found:
+            args.ai_engine, args.ai_location = args.ai, found[args.ai]
+            return True
+        print(f"--ai {args.ai}: not found on this computer.", file=sys.stderr)
+        if not interactive:
+            return False
+    if found and not interactive:
+        args.ai_engine, args.ai_location = next(iter(found.items()))
+        return True
+    if found:
+        engines = list(found)
+        choice = ask("Чем делать выжимку?",
+                     [f"{n} - {ai_engines.describe(e, found[e])}" for n, e in enumerate(engines, start=1)],
+                     f"{ai_engines.TITLES[engines[0]]}", number_in(1, len(engines)))
+        engine = engines[(choice or 1) - 1]
+        args.ai_engine, args.ai_location = engine, found[engine]
+        return True
+    if not interactive:
+        print("No AI for the summary found (Claude Code, Codex, or a local model server); "
+              "the summary is skipped.", file=sys.stderr)
+        return False
+    print("\nНе найден ни Claude Code, ни Codex (ChatGPT), ни локальная модель (Ollama, LM Studio).")
+    while True:
+        choice = ask("Что сделать?", ["1 - отменить выжимку (текст всё равно будет)",
+                                      "2 - указать путь к установленному ИИ"],
+                     "отменить выжимку", number_in(1, 2))
+        if choice != 2:
+            return False
+        print("Путь к claude.exe или codex.cmd (можно папку с ним), или адрес локального сервера,\n"
+              "например http://127.0.0.1:11434:")
+        try:
+            entered = input("> ").lstrip("﻿")
+        except EOFError:
+            return False
+        result = ai_engines.classify(entered)
+        if result:
+            args.ai_engine, args.ai_location = result
+            ai_engines.remember(*result)
+            print(f"Найдено: {ai_engines.describe(*result)}. Путь запомнен для следующих запусков.")
+            return True
+        print("  По этому пути не нашёлся ни claude, ни codex, и локальный сервер не отвечает.")
 
 
 LANGUAGE_CHOICES = [("ru", "русский"), ("en", "английский"), ("de", "немецкий"),
@@ -657,10 +737,12 @@ def ask_options(args, has_media: bool) -> None:
                         "не знаю, определить автоматически", number_in(1, 20))
             args.speakers = count or 0
     if not args.summary:
-        choice = ask("Сделать выжимку через Claude? Текст расшифровки уйдёт в Claude под вашим "
-                     "аккаунтом,\nпоэтому только если правила, под которыми вы пользуетесь Claude, "
-                     "это разрешают.", ["1 - да", "2 - нет"], "нет", number_in(1, 2))
+        choice = ask("Сделать выжимку с помощью ИИ? Текст расшифровки уйдёт в выбранный ИИ под "
+                     "вашим аккаунтом\n(у локальной модели останется на компьютере), поэтому только "
+                     "если ваши правила это разрешают.", ["1 - да", "2 - нет"], "нет", number_in(1, 2))
         args.summary = choice == 1
+    if args.summary:
+        args.summary = choose_ai(args, interactive=True)
     print()
 
 
@@ -678,7 +760,11 @@ def main() -> int:
     parser.add_argument("--speakers", nargs="?", type=int, const=0, default=None, metavar="N",
                         help="label who speaks (voice separation); N = number of speakers if known")
     parser.add_argument("--summary", action="store_true",
-                        help="also write <name>.summary.md via Claude Code (sends the transcript to Claude)")
+                        help="also write <name>.summary.md with an AI (sends the transcript to it, "
+                             "unless it is a local model)")
+    parser.add_argument("--ai", choices=ai_engines.ENGINES, default=None,
+                        help="AI for the summary: claude (Claude Code), codex (ChatGPT via Codex "
+                             "CLI) or local (Ollama, LM Studio, ...); default: the first installed")
     parser.add_argument("--srt", action="store_true", help="also write .srt subtitles with exact timings")
     parser.add_argument("--out-dir", default=None, help="output folder (default: a subfolder named after each input, next to it)")
     parser.add_argument("--model", default=DEFAULT_MODEL,
@@ -695,6 +781,7 @@ def main() -> int:
                         help="overwrite existing results (by default a recording whose .txt exists "
                              "is not transcribed again, and an existing summary is kept)")
     args = parser.parse_args()
+    args.ai_engine = args.ai_location = None
 
     if not args.inputs:
         if not args.ask:
@@ -715,6 +802,10 @@ def main() -> int:
     transcripts = [p for p in args.inputs if p.lower().endswith(".txt")]
     if args.ask:
         ask_options(args, bool(media))
+    elif args.summary:
+        args.summary = choose_ai(args, interactive=False)
+        if not args.summary and transcripts:
+            return 1
     if args.speakers is not None and media and not (
             os.path.isfile(SEGMENTATION_MODEL) and os.path.isfile(EMBEDDING_MODEL)):
         print("The voice separation models are missing. Run setup.cmd.", file=sys.stderr)
