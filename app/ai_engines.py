@@ -140,12 +140,60 @@ def classify(entered: str) -> tuple[str, str] | None:
     return None
 
 
+# Account each verified tool is logged in with, shown next to its name (engine -> text).
+ACCOUNTS: dict[str, str] = {}
+
+
+def check_login(engine: str, location: str) -> tuple[bool | None, str]:
+    """Whether the tool is logged in, without sending a request to the AI: (True, account),
+    (False, what to do), or (None, why it could not be told) for versions without the command."""
+    if engine == "local":
+        return (True, "") if local_models(location) else (False, "сервер не отвечает")
+    command = [location, "auth", "status"] if engine == "claude" else [location, "login", "status"]
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8",
+                                errors="replace", timeout=20, cwd=TOOL_DIR)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return None, str(error)
+    output = (result.stdout + result.stderr).strip()
+    if engine == "claude":
+        try:
+            status = json.loads(result.stdout)
+        except ValueError:
+            return None, "вход не проверен (старая версия Claude Code)"
+        if not status.get("loggedIn"):
+            return False, "вход не выполнен: запустите claude и войдите (/login)"
+        account = status.get("email") or status.get("orgName") or ""
+        return True, account
+    if result.returncode == 0 and "logged in" in output.lower():
+        return True, output.split("using", 1)[-1].strip() if "using" in output else ""
+    if "not logged in" in output.lower() or result.returncode != 0:
+        return False, "вход не выполнен: выполните codex login"
+    return None, "вход не проверен"
+
+
+def verify_engines(found: dict[str, str]) -> tuple[dict[str, str], dict[str, str]]:
+    """Keeps the tools that are logged in (or whose login cannot be told); returns
+    (usable engine -> location, left out engine -> reason)."""
+    usable, left_out = {}, {}
+    for engine, location in found.items():
+        logged_in, note = check_login(engine, location)
+        if logged_in is False:
+            left_out[engine] = note
+            continue
+        usable[engine] = location
+        if note and engine != "local":
+            ACCOUNTS[engine] = note if logged_in else f"({note})"
+    return usable, left_out
+
+
 def describe(engine: str, location: str) -> str:
     if engine == "local":
         models = local_models(location)
         model = load_settings().get("local", "model", fallback=None) or (models[0] if models else "?")
         return f"{TITLES[engine]}: {model} ({location})"
-    return TITLES[engine]
+    account = ACCOUNTS.get(engine)
+    return f"{TITLES[engine]} — {account}" if account else TITLES[engine]
 
 
 # --- calls -----------------------------------------------------------------------------------

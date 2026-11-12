@@ -640,15 +640,18 @@ def choose_ai(args, interactive: bool) -> bool:
     the first installed one. Returns False if there is none (the check and the summary are
     then skipped)."""
     if interactive:
-        print("\nИщу установленные ИИ: Claude Code, Codex (ChatGPT), локальные модели (Ollama, "
-              "LM Studio)...", flush=True)
+        print("\nИщу установленные ИИ (Claude Code, Codex (ChatGPT), локальные модели Ollama и "
+              "LM Studio) и проверяю, выполнен ли в них вход...", flush=True)
     else:
-        print("Looking for the installed AI tools...", flush=True)
+        print("Looking for the installed AI tools and checking their login...", flush=True)
     started = time.time()
-    found = ai_engines.find_engines()
+    found, left_out = ai_engines.verify_engines(ai_engines.find_engines())
+    for engine, reason in left_out.items():
+        print(f"  {ai_engines.TITLES[engine]}: установлен, но {reason}" if interactive
+              else f"  {ai_engines.TITLES[engine]} left out: {reason}", flush=True)
     if interactive:
-        names = ", ".join(ai_engines.TITLES[engine] for engine in found) or "ничего"
-        print(f"Найдено за {time.time() - started:.0f} с: {names}.", flush=True)
+        names = ", ".join(ai_engines.describe(engine, found[engine]) for engine in found) or "ничего"
+        print(f"Готово к работе ({time.time() - started:.0f} с): {names}.", flush=True)
     if args.ai:
         if args.ai in found:
             args.ai_engine, args.ai_location = args.ai, found[args.ai]
@@ -686,6 +689,10 @@ def choose_ai(args, interactive: bool) -> bool:
             return False
         result = ai_engines.classify(entered)
         if result:
+            usable, left_out = ai_engines.verify_engines(dict([result]))
+            if not usable:
+                print(f"  Найден, но {left_out[result[0]]}.")
+                continue
             args.ai_engine, args.ai_location = result
             ai_engines.remember(*result)
             print(f"Найдено: {ai_engines.describe(*result)}. Путь запомнен для следующих запусков.")
@@ -788,7 +795,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Offline speech-to-text for meeting recordings.")
     parser.add_argument("--live", action="store_true",
                         help="transcribe a meeting while it happens, from the computer's sound and "
-                             "the microphone (live-transcribe.cmd); Enter stops it")
+                             "the microphone, in a window (live-transcribe.cmd)")
+    parser.add_argument("--console", action="store_true",
+                        help="with --live: no window, text in the console, Enter stops it")
     parser.add_argument("inputs", nargs="*",
                         help="audio/video files (mp4, mkv, mp3, wav, m4a, ...) or existing .txt "
                              "transcripts; without any, the tool asks for them")

@@ -15,5 +15,5 @@ __pycache__/
 # Left by an interrupted transcription.
 *.partial
 
-# Where the AI for summaries was found (paths entered by the user).
-ai.local.ini
+# Local settings: where the AI was found, the window's last language and microphone.
+*.local.ini

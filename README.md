@@ -87,26 +87,80 @@ first one found), `--srt`, `--terms FILE`, `--no-terms`, `--no-filter`, `--out-d
 
 ## Live mode
 
-`live-transcribe.cmd` (`app\transcribe.cmd --live --ask`, code in `app\live.py`) listens to the
-default microphone and, through WASAPI loopback, to every output device (so the other side of a
-Teams or Zoom call is heard whichever device the call plays on), with
-[soundcard](https://github.com/bastibe/SoundCard) (BSD-3-Clause). Each device is read in its own
-thread in 0.25 s blocks; the microphone sets the pace, a loopback block that is not there yet is
-silence (loopback delivers zeros on time when nothing plays), a device that fails is dropped. The
-mix goes to `meeting.wav` (16 kHz mono) and is cut into pieces of 8-25 s at the quietest moment
-near a pause; silent pieces are skipped. A worker thread transcribes the pieces with the same
-Whisper settings and filter as files and writes `meeting.live.txt` and the console. Enter stops
-it; the rest is transcribed. Then it offers to process `meeting.wav` in full with the usual
-questions (speakers, check, summary), or to summarize the live text, and asks whether to keep
-the sound. Default folder: `Documents\Transcripts\<yyyy-mm-dd hh-mm>`, or `--out-dir`.
+`live-transcribe.cmd` (`app\transcribe.cmd --live`) opens a window (`app\live_gui.py`, tkinter,
+no extra package) on the engine in `app\live.py`:
 
-Tested with speech played through the speakers (33 s, eight sentences): every sentence came out
-right, 2-8 s after it was said, and the full processing ran. Not yet tested: a real call, a
-long meeting, a computer without an NVIDIA GPU. Speakers are separated only in the full
-processing afterwards; participants should be told that the meeting is transcribed.
+- **Before**: language, microphone (default preselected, or none), output devices to listen to
+  (all checked); the Whisper model loads in the background meanwhile.
+- **During**: recording light and timer; level meters for the microphone and the computer sound
+  (with "тишина" after 15 s of silence; the microphone meter shows the level after the gain); a
+  yellow banner when the other side is heard but the microphone has stayed below -52 dB for 20 s;
+  the text with timestamps and the labels "Вы" / "Собеседники" (coloured), auto-scrolling unless
+  the user scrolled up ("↓ К концу" then); the unfinished phrase of each side as a grey italic
+  draft, refreshed about every 2 s; Stop, open folder, copy text, text size.
+- **After**: the full processing as check boxes (transcribe again, speakers and how many, check,
+  summary, which of the AI tools found, or a path; delete the sound), run in a thread with its
+  output in the window, and buttons to open the results. Closing the window while recording asks,
+  then stops properly.
+
+Engine: the microphone and, through WASAPI loopback, the chosen output devices (so the other side
+of a Teams or Zoom call is heard whichever device the call plays on) are read with
+[soundcard](https://github.com/bastibe/SoundCard) (BSD-3-Clause), each in its own thread in 0.25 s
+blocks; the microphone sets the pace, a loopback block that is not there yet is silence (loopback
+delivers zeros on time when nothing plays), a device that fails is dropped. The microphone and the
+summed computer sound stay **two streams**:
+
+- the microphone gets an automatic gain (speech level of the last 20 s brought to about -20 dB,
+  at most +30 dB, changing gradually): Teams' automatic microphone sensitivity can turn the system
+  level down during a call, which made the user's own words disappear under the other side in the
+  first version (a real call had no trace of them in the mixed recording);
+- each stream is cut into pieces of 20-29 s at the quietest moment near a pause (silent pieces are
+  skipped) and transcribed on its own by one worker thread (beam 5, the same filter as for files);
+  the segments of both are written to `meeting.live.txt` in time order, a segment being held back
+  until neither stream can still produce an earlier one, labelled "Вы" for the microphone when both
+  streams are recorded;
+- the voices of the other side (or of everyone, with the microphone only) are told apart phrase by
+  phrase (`OnlineVoices`): the phrase's TitaNet embedding is compared with the voices heard so far,
+  joined to the most alike at cosine 0.42 or more, and starts a new voice only when the phrase is
+  2.5 s or longer ("Собеседник 1", "Собеседник 2", ...; "Говорящий N" with one stream). On three
+  AMI meetings (4 people) this found exactly 4 voices with 92% of the words right on whole-file
+  phrases, and inside the live engine 4, 5 and 3 voices with 82, 73 and 93% of the speech time
+  right; stricter thresholds (0.6-0.7) made 6-36 voices; cutting phrases at word pauses did not
+  help;
+- echo: runs of 3+ words of a microphone segment that match what the computer played within 2 s
+  are removed (speakers instead of a headset); a segment that is 60%+ echo with nothing left of its
+  own is dropped;
+- `meeting.wav` gets both as two channels (left: microphone after the gain, right: computer); the
+  full processing reads it downmixed;
+- when no piece is waiting, the stream with the most new sound is drafted (beam 1) at most every
+  2 s.
+
+On a synthetic call (other side at -25 dB with -40 dB background noise, own voice at -45 dB as with
+a turned-down microphone), the words of the own side found went from 66% (one mixed stream, no
+gain) to 97% with a headset, and from 59% to 97% with loudspeakers (echo at -35 dB); the other
+side stayed at 96%. `--live --console --ask` is the same without the window
+(Enter stops). Default folder: `Documents\Transcripts\<yyyy-mm-dd hh-mm>`, or `--out-dir`. The
+window remembers the last language and microphone in `app\ui.local.ini` (not in git).
+
+Piece length, measured by replaying recordings through the engine and comparing the live text
+with a full transcription of the same file (agreement = 2 x matching words / all words, so misses
+and extra words both count): an 84 s Russian call / a 17 min AMI meeting gave 42% / 88.9% with
+8-25 s pieces, 74% / 92.3% with 15-28 s, 91% / 93.0% with 20-29 s; giving Whisper the end of the
+previous text as a prompt added nothing measurable. Short pieces lose the context of a phrase, which
+is why the first version's live text was clearly worse than the full transcription; the drafts are
+what make long pieces bearable.
+
+Tested by driving the window with speech played through the speakers, and on a real call by the
+author. Not yet tested: a long meeting, a computer without an NVIDIA GPU. Speakers are separated
+only in the full processing afterwards; participants should be told that the meeting is
+transcribed.
 
 ## Summary AI
 
+Only tools that are installed and logged in are offered: `verify_engines` runs `claude auth
+status` (JSON, `loggedIn`; the account's e-mail is shown next to Claude, so a work and a personal
+login cannot be mixed up) and `codex login status`, about half a second each, without sending
+anything to the AI; a version without these commands is offered with "login not checked".
 `app\ai_engines.py` finds the AI tools (Claude Code and Codex on PATH or at a remembered path;
 local servers at a remembered address or the default ports 11434 for Ollama and 1234 for LM
 Studio) and calls them. Everything goes through stdin, so no transcript text passes a command
@@ -243,7 +297,7 @@ The top level holds only what people start or read; everything else is in `app\`
 | `terms.txt` | your terms for Whisper (optional, not in git) |
 | `app\transcribe.cmd` | command-line entry point |
 | `app\transcribe.py` | the tool |
-| `app\live.py` | live mode: capture, mixing, transcription in pieces |
+| `app\live.py`, `app\live_gui.py` | live mode: capture, mixing, transcription in pieces; its window |
 | `app\ai_engines.py` | finding and calling the AI for the check and the summary |
 | `app\checker.py`, `app\check_prompt.md` | the text check: applying the AI's findings; the instructions it gets |
 | `app\summary_prompt.md` | the instructions the AI gets for the summary |
