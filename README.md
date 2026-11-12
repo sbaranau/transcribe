@@ -28,8 +28,9 @@ transcript.
 
 ## Install and update
 
-Needs Windows, `git` and [`uv`](https://docs.astral.sh/uv/) (`winget install --id Git.Git`,
-`winget install --id astral-sh.uv`):
+Needs Windows and `git` (`winget install --id Git.Git`). [`uv`](https://docs.astral.sh/uv/) is
+installed by `setup.cmd` with `winget install --id astral-sh.uv` when it is missing (winget may
+ask you to accept its agreements; the script accepts nothing for you):
 
 ```
 git clone https://github.com/sbaranau/transcribe.git C:\bin\transcribe
@@ -189,7 +190,7 @@ The top level holds only what people start or read; everything else is in `app\`
 |---|---|
 | `drop-files-here.cmd` | drag-and-drop entry point with the questions |
 | `transcribe.cmd` | command-line entry point |
-| `setup.cmd` | builds `app\python\`, `app\venv\` and `app\models\`, e.g. on another machine; needs `uv`; asks about the Send To menu; moves an old top-level layout into `app\` |
+| `setup.cmd` | installs `uv` with winget if missing; builds `app\python\`, `app\venv\` and `app\models\`, e.g. on another machine; asks about the Send To menu; moves an old top-level layout into `app\` |
 | `send-to-menu.cmd` | add or remove the Send To menu entry |
 | `ИНСТРУКЦИЯ.md`, `README.md` | user guide in Russian, this file |
 | `terms.txt` | your terms for Whisper (optional, not in git) |

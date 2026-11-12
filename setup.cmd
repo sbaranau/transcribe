@@ -1,13 +1,14 @@
 @echo off
 rem (Re)creates everything the tool needs inside app\: a private Python 3.12, the virtual
 rem environment with the pinned packages, and the models (download_models.py).
-rem Needs uv (https://docs.astral.sh/uv/) on PATH and internet access. Safe to run again.
+rem Needs internet access, and uv (https://docs.astral.sh/uv/): installed with winget if missing.
+rem Safe to run again.
 setlocal
 set "TOOL_DIR=%~dp0"
 set "APP=%~dp0app\"
 set "HF_HUB_DISABLE_SYMLINKS_WARNING=1"
 
-where uv >nul 2>nul || (echo uv not found on PATH. & exit /b 1)
+where uv >nul 2>nul || call :install_uv || exit /b 1
 
 rem Asked now, before the long downloads, and done at the end. Optional; it can be changed
 rem later with send-to-menu.cmd. No answer (no console) counts as No.
@@ -39,6 +40,21 @@ if "%SEND_TO%"=="Y" (
 
 echo Setup complete.
 exit /b 0
+
+:install_uv
+echo uv, the Python manager this tool is installed with, is missing. Installing it with winget...
+where winget >nul 2>nul || (
+    echo winget is not available. Install uv yourself, see https://docs.astral.sh/uv/getting-started/installation/
+    echo then run setup.cmd again.
+    exit /b 1
+)
+rem No agreements are accepted here: winget asks you itself if it needs to.
+call winget install --id astral-sh.uv --exact --source winget
+rem winget puts uv on PATH for new windows only; look where it and uv's own installer put it.
+set "PATH=%PATH%;%LOCALAPPDATA%\Microsoft\WinGet\Links;%USERPROFILE%\.local\bin"
+where uv >nul 2>nul && exit /b 0
+echo uv was not found after the installation. Open a new window and run setup.cmd again.
+exit /b 1
 
 :move_old_layout
 rem Before 2026-11-12, python\, venv\ and models\ were next to this file. The models are moved
