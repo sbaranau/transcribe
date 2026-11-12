@@ -1,6 +1,6 @@
 @echo off
 rem (Re)creates everything the tool needs inside this folder: a private Python 3.12,
-rem the virtual environment with the pinned packages, and the Whisper model.
+rem the virtual environment with the pinned packages, and the models (download_models.py).
 rem Needs uv (https://docs.astral.sh/uv/) on PATH and internet access. Safe to run again.
 setlocal
 set "TOOL_DIR=%~dp0"
@@ -25,12 +25,8 @@ echo [2/3] Virtual environment and packages
 uv venv "%TOOL_DIR%venv" --python "%PY%" --clear || exit /b 1
 uv pip install --python "%TOOL_DIR%venv\Scripts\python.exe" --only-binary ":all:" -r "%TOOL_DIR%requirements.txt" || exit /b 1
 
-echo [3/3] Whisper model large-v3-turbo (about 1.6 GB)
-if exist "%TOOL_DIR%models\large-v3-turbo\model.bin" (
-    echo Model already present.
-) else (
-    "%TOOL_DIR%venv\Scripts\python.exe" -c "from huggingface_hub import snapshot_download; snapshot_download('mobiuslabsgmbh/faster-whisper-large-v3-turbo', local_dir=r'%TOOL_DIR%models\large-v3-turbo')" || exit /b 1
-)
+echo [3/3] Models: Whisper large-v3-turbo (about 1.6 GB) and voice separation (about 32 MB)
+"%TOOL_DIR%venv\Scripts\python.exe" "%TOOL_DIR%download_models.py" || exit /b 1
 
 if "%SEND_TO%"=="Y" (
     call "%TOOL_DIR%send-to-menu.cmd" add || exit /b 1

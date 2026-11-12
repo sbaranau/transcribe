@@ -1,8 +1,8 @@
 @echo off
-rem Optional: adds two entries to the Explorer "Send To" menu (right-click a recording ->
-rem Send To), pointing to drop-text.cmd and drop-text-summary.cmd, or removes them again.
+rem Optional: adds an entry to the Explorer "Send To" menu (right-click a recording ->
+rem Send To), pointing to drop-files-here.cmd, or removes it again.
 rem   send-to-menu.cmd add | remove | status
-rem Without an argument it asks. Only the two shortcuts in your own SendTo folder are touched.
+rem Without an argument it asks. Only the tool's own shortcuts in your SendTo folder are touched.
 setlocal
 set "PYTHONIOENCODING=utf-8"
 set "PYTHONUTF8=1"

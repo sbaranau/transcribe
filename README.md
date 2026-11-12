@@ -7,6 +7,9 @@ idea, task and date.
 - **Transcript**: runs locally with Whisper (`faster-whisper`, model `large-v3-turbo`) on the
   NVIDIA GPU, or on the CPU if no GPU is available. Nothing leaves the machine. A 3-hour
   recording takes about 10 minutes on the GPU.
+- **Speakers** (optional): voice separation with [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)
+  (pyannote segmentation 3.0 + NVIDIA NeMo TitaNet-small embeddings) on the CPU, in parallel
+  with Whisper, labels paragraphs "Speaker 1", "Speaker 2", ... (in the meeting's language).
 - **Summary**: made by Claude Code (`claude -p`) under your own account. It sends the transcript
   to Claude, so it is only for meetings whose content the rules you use Claude under allow (your
   organization's AI usage rules for a work account, and Anthropic's terms): typically no
@@ -30,36 +33,65 @@ C:\bin\transcribe\setup.cmd
 ```
 
 `setup.cmd` puts a private Python 3.12, the packages (with the NVIDIA CUDA libraries) and the
-Whisper model into the folder, about 3 GB. Update with `git -C C:\bin\transcribe pull`, and run
-`setup.cmd` again when `requirements.txt` changed. The environment is bound to its folder path:
+models (`download_models.py`: Whisper and the voice separation models) into the folder, about
+3 GB. Update with `git -C C:\bin\transcribe pull`, and run `setup.cmd` again when
+`requirements.txt` or the models changed; models already there are not downloaded again. The environment is bound to its folder path:
 after moving the folder, run `setup.cmd` again. A Russian guide is in `ИНСТРУКЦИЯ.md`.
 
 ## Usage
 
-Drag files in Explorer onto:
+Drag recordings in Explorer onto `drop-files-here.cmd` (or double-click it and drag a file into
+the window). It writes `<name>.txt` and `<name>.srt` and asks, in Russian, with numbered answers
+(Enter = "don't know" / "no"): the language (Russian, English, German, French, several
+languages, or detect), whether to separate speakers and how many there are (or estimate), and
+whether to make a summary with Claude.
 
-| Script | Result |
-|---|---|
-| `drop-text.cmd` | `<name>.txt` and `<name>.srt`, local only |
-| `drop-text-summary.cmd` | the same plus `<name>.summary.md`; asks first whether the content may go to Claude |
-
-Optionally the same two scripts are in the Explorer **Send To** menu (right-click a recording,
-Send To, "Расшифровать (текст)" / "Расшифровать (текст и выжимка)"). `setup.cmd` asks whether
-to add them; `send-to-menu.cmd add|remove|status` changes it later. Only these two shortcuts in
-the user's own SendTo folder are touched.
+Optionally the same script is in the Explorer **Send To** menu (right-click a recording, Send
+To, "Расшифровать"). `setup.cmd` asks whether to add it; `send-to-menu.cmd add|remove|status`
+changes it later. Only the tool's own shortcut in the user's SendTo folder is touched.
 
 Or from a terminal:
 
 ```
 C:\bin\transcribe\transcribe.cmd "meeting.mp4" --language ru
-C:\bin\transcribe\transcribe.cmd "meeting.mp4" --language ru --summary --srt
+C:\bin\transcribe\transcribe.cmd "meeting.mp4" --language ru --speakers 3 --summary --srt
+C:\bin\transcribe\transcribe.cmd "meeting.mp4" --ask             (the questions, as when dragging)
 C:\bin\transcribe\transcribe.cmd "meeting.txt" --summary        (summarize an existing transcript)
 C:\bin\transcribe\transcribe.cmd --help
 ```
 
-Options: `--language ru|de|en|...` (default: detected from the first 30 seconds; set it for
-mixed-language meetings), `--summary`, `--srt`, `--terms FILE`, `--no-terms`, `--no-filter`, `--out-dir DIR`,
-`--cpu`, `--model`, `--force`.
+Options: `--language ru|de|en|...|multi` (default: detected from the first 30 seconds; `multi`
+detects the language for every 30-second window), `--speakers [N]` (label speakers; N if the
+number is known), `--ask`, `--summary`, `--srt`, `--terms FILE`, `--no-terms`, `--no-filter`,
+`--out-dir DIR`, `--cpu`, `--model`, `--force`.
+
+## Speakers
+
+`--speakers` runs the voice separation on the CPU in a thread while Whisper transcribes, then
+assigns every word to the speaker who talks most during it; a speaker change starts a new
+paragraph and subtitle. Speakers are numbered by first appearance.
+
+How the speakers are found (`diarize`, `refine_speakers`):
+
+1. sherpa-onnx splits the speech into voice groups with a low clustering threshold
+   (`SPEAKER_THRESHOLD` 0.85), so one person often ends up in many groups: 80 on a 3-hour
+   recording with 4 people.
+2. Each group gets an average voice embedding from up to 30 s of its longest turns; groups at
+   least `SAME_PERSON_SIMILARITY` (0.72) alike are joined, step by step.
+3. Persons with less than 2% of the speech are taken as fragments and folded into the most
+   alike person, except, when the number of speakers is given, that many of the most talkative
+   persons (so someone who joined late or said little stays separate).
+4. With a given number, the most alike persons are joined until that number is left.
+
+sherpa-onnx's own fixed-count mode is not used: on the 4-person recording it merged two people
+and kept a 0.4% noise group. Measured: on that recording the steps give 4 persons (61, 20, 10,
+9% of the speech) whether the number is given or not; on the sherpa-onnx reference recordings
+(one with 4 speakers, three with 2) every count is right in both modes. Joining at any value
+from 0.70 to 0.75 gave the same 4 persons; different people on the reference recordings are
+0.12-0.43 alike. TitaNet-small was chosen over WeSpeaker ResNet34, CAM++ and ERes2Net, which
+counted the reference speakers worse; a segmentation window shift of 0.25 instead of 0.1 gave
+the same counts at about a third of the time. Still, give the number when it is known, and
+check the labels where people talk at once.
 
 Existing results are kept: a recording whose `<name>.txt` exists is not transcribed again (so
 hand corrections survive; with `--summary` only a missing summary is made from that `.txt`),
@@ -96,8 +128,9 @@ For a `.txt` input, the summary is written next to that `.txt`.
 
 - `<name>.txt`: the full transcript in paragraphs. Each paragraph starts with its
   `[hh:mm:ss]` timestamp, so a passage can be found in the recording. A new paragraph starts
-  at the first sentence end after about 30 seconds (at the latest after 90 seconds), or after
-  a pause of 2 seconds or more.
+  at the first sentence end after about 30 seconds (at the latest after 90 seconds), after
+  a pause of 2 seconds or more, or (with `--speakers`) when the speaker changes; then the
+  timestamp is followed by the speaker label.
 - `<name>.srt`: subtitles timed by word timestamps; a Whisper segment is split where its words
   are a second or more apart, so a subtitle or paragraph never spans a long pause. Players pick them up automatically only
   from the recording's folder, so load them by hand (VLC: Subtitle > Add Subtitle File), or move
@@ -109,7 +142,8 @@ For a `.txt` input, the summary is written next to that `.txt`.
   language, headings included, without introductions or repetition. Check it against the
   transcript before passing it on. The prompt is in `summary_prompt.md`.
 
-Speakers are not labelled, and recognition makes mistakes with names and technical terms.
+Recognition makes mistakes with names and technical terms, and the speaker labels with
+overlapping speech, similar voices and people who say very little.
 
 ## Folder layout
 
@@ -122,6 +156,8 @@ Speakers are not labelled, and recognition makes mistakes with names and technic
 | `python\` | private Python 3.12 (installed by uv) |
 | `venv\` | virtual environment with the packages and the NVIDIA CUDA libraries |
 | `models\large-v3-turbo\` | the Whisper model, so it works offline |
-| `setup.cmd` | rebuilds `python\`, `venv\` and `models\`, e.g. on another machine; needs `uv`; asks about the Send To menu |
-| `send-to-menu.cmd`, `send_to_menu.py` | add or remove the Send To menu entries |
+| `models\diarization\` | the voice separation models |
+| `drop-files-here.cmd` | drag-and-drop entry point with the questions |
+| `setup.cmd`, `download_models.py` | rebuild `python\`, `venv\` and `models\`, e.g. on another machine; need `uv`; setup asks about the Send To menu |
+| `send-to-menu.cmd`, `send_to_menu.py` | add or remove the Send To menu entry |
 | `ИНСТРУКЦИЯ.md` | user guide in Russian |

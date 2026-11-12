@@ -2,9 +2,10 @@
 
 Usage (via send-to-menu.cmd):  send-to-menu.cmd add | remove | status
 
-Creates two shortcuts in the user's SendTo folder (%APPDATA%\\Microsoft\\Windows\\SendTo) that
-point to drop-text.cmd and drop-text-summary.cmd in this folder. Nothing else is changed;
-"remove" deletes exactly these two shortcuts. After moving the tool folder, run "add" again.
+Creates one shortcut, "Расшифровать", in the user's SendTo folder
+(%APPDATA%\\Microsoft\\Windows\\SendTo) that points to drop-files-here.cmd in this folder.
+Nothing else is changed; "remove" deletes exactly the tool's shortcuts (also those of older
+versions). After moving the tool folder, run "add" again.
 """
 import base64
 import os
@@ -14,9 +15,10 @@ import sys
 TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
 # Shortcut name (as shown in the menu) -> script in the tool folder.
 SHORTCUTS = {
-    "Расшифровать (текст)": "drop-text.cmd",
-    "Расшифровать (текст и выжимка)": "drop-text-summary.cmd",
+    "Расшифровать": "drop-files-here.cmd",
 }
+# Shortcuts made by older versions; removed by "add" and "remove".
+OLD_SHORTCUTS = ["Расшифровать (текст)", "Расшифровать (текст и выжимка)"]
 
 # Creates one shortcut; the paths come in through environment variables, so no quoting of
 # user paths inside the PowerShell code is needed.
@@ -38,8 +40,16 @@ def link_path(name: str) -> str:
     return os.path.join(send_to_dir(), name + ".lnk")
 
 
+def remove_old() -> None:
+    for name in OLD_SHORTCUTS:
+        if os.path.isfile(link_path(name)):
+            os.remove(link_path(name))
+            print(f"Removed old entry from Send To: {name}")
+
+
 def add() -> int:
     os.makedirs(send_to_dir(), exist_ok=True)
+    remove_old()
     encoded = base64.b64encode(CREATE_SHORTCUT_PS.encode("utf-16-le")).decode("ascii")
     for number, (name, script) in enumerate(SHORTCUTS.items()):
         # WScript.Shell saves through the ANSI code page and fails on Cyrillic names, so the
@@ -63,6 +73,7 @@ def add() -> int:
 
 
 def remove() -> int:
+    remove_old()
     for name in SHORTCUTS:
         if os.path.isfile(link_path(name)):
             os.remove(link_path(name))

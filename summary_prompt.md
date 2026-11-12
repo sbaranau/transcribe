@@ -1,7 +1,15 @@
 The text on standard input is an automatic speech-to-text transcript of a recorded meeting or
 conversation of any kind: a work meeting, call, interview, workshop, webinar or lecture. Each
-paragraph starts with its timestamp [hh:mm:ss]. Speakers are not labelled, and the recognition
-makes mistakes (wrong words, misspelled names, misheard numbers).
+paragraph starts with its timestamp [hh:mm:ss]. The recognition makes mistakes (wrong words,
+misspelled names, misheard numbers).
+
+Paragraphs may also carry a speaker label after the timestamp, such as "Говорящий 2:" or
+"Speaker 2:", from automatic voice separation. Then use the labels to say who proposed,
+objected, decided or took a task. Where the transcript makes a speaker's name clear (they
+introduce themselves, or are addressed by name right before they answer), write the name with
+the label, e.g. "Ира (Говорящий 2)", and add "(?)" if it is not certain. The voice separation
+can be wrong, for example when people talk at once or voices are similar; if a label looks
+wrong in context, say so. Without labels, attribute only what the text itself makes clear.
 
 Write a summary for a reader who did not attend. It must be complete and dense at the same
 time:

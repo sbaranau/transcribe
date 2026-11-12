@@ -1,11 +1,14 @@
 """Transcribe meeting recordings to readable text, optionally with a Claude summary.
 
 Usage:
-    transcribe.cmd <file> [<file> ...] [--language ru] [--summary] [--srt] [--out-dir DIR] [--cpu] [--force]
+    transcribe.cmd <file> [<file> ...] [--language ru|multi] [--speakers [N]] [--summary] [--srt]
+                   [--out-dir DIR] [--cpu] [--force]
+    transcribe.cmd <file> --ask      asks for language, speakers and summary (drop-files-here.cmd)
 
 For each audio/video input it writes, into a subfolder named <name> next to the input, or into --out-dir:
-    <name>.txt          full transcript in paragraphs, each starting with [hh:mm:ss]
-    <name>.srt          subtitles with exact segment timings (with --srt)
+    <name>.txt          full transcript in paragraphs, each starting with [hh:mm:ss] and, with
+                        --speakers, the speaker label
+    <name>.srt          subtitles timed by the spoken words (with --srt)
     <name>.summary.md   structured summary made by Claude Code (with --summary)
 
 Transcription runs locally (NVIDIA GPU when available, CPU otherwise); nothing leaves the
@@ -23,12 +26,14 @@ Terms (names, products, jargon) that Whisper should spell right are read, one pe
 --terms FILE and from terms.txt in the tool folder (local, not in git). They are passed to Whisper as hotwords for every 30-second window.
 """
 import argparse
+import bisect
 import glob
 import os
 import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 
 TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -65,6 +70,34 @@ REPEAT_LOOP = re.compile(r"(\b\w.{0,60}?)(?:[\s,.;:!?-]+\1\b){3,}", re.IGNORECAS
 REPEATED_SEGMENT_MIN_WORDS = 3
 
 PARTIAL_SUFFIX = ".partial"
+MULTILINGUAL = "multi"
+
+# Voice separation (speaker diarization) with sherpa-onnx; models downloaded by setup.cmd.
+SAMPLE_RATE = 16000
+DIARIZATION_DIR = os.path.join(TOOL_DIR, "models", "diarization")
+SEGMENTATION_MODEL = os.path.join(DIARIZATION_DIR, "sherpa-onnx-pyannote-segmentation-3-0", "model.onnx")
+EMBEDDING_MODEL = os.path.join(DIARIZATION_DIR, "nemo_en_titanet_small.onnx")
+# Clustering distance when the number of speakers is unknown: higher merges more voices.
+# Chosen 2026-11-12 on the sherpa-onnx reference recordings (one with 4 speakers, three with
+# 2): TitaNet-small counted all four right from 0.8 to 0.9; WeSpeaker ResNet34, CAM++ and
+# ERes2Net got at most 3 of 4 at any threshold.
+SPEAKER_THRESHOLD = 0.85
+# Voice groups whose average embeddings (from up to CENTROID_SECONDS of their speech) are at
+# least this alike are taken as one person. On a real 3-hour recording with 4 people, sherpa-onnx
+# gave 80 groups; joining at 0.70-0.75 left exactly 4 persons with more than 2% of the speech
+# (60, 19, 10, 8%), and on the reference recordings no two different people were joined at any
+# value from 0.55 to 0.8 (different people there: 0.12-0.43).
+SAME_PERSON_SIMILARITY = 0.72
+CENTROID_SECONDS = 30.0
+# Persons with less of the speech than this after joining are fragments and are folded into the
+# most alike larger person.
+MIN_SPEAKER_SHARE = 0.02
+# Segmentation windows (10 s) advance by this share of their length. sherpa-onnx's default
+# 0.1 took ~28 min per 3 h of audio; 0.25 counted the same speakers on the reference
+# recordings in ~11 min, 0.75 started to miss.
+WINDOW_SHIFT_RATIO = 0.25
+SPEAKER_LABELS = {"ru": "Говорящий", "uk": "Мовець", "de": "Sprecher", "fr": "Intervenant",
+                  "it": "Parlante", "es": "Hablante"}
 
 
 def add_cuda_dll_dirs() -> None:
@@ -89,32 +122,71 @@ def format_srt_time(seconds: float) -> str:
 
 
 class ParagraphWriter:
-    """Joins short Whisper segments into readable paragraphs with a start timestamp."""
+    """Joins short Whisper segments into readable paragraphs with a start timestamp and,
+    when speakers are known, the speaker label; a new speaker always starts a paragraph."""
 
     def __init__(self, out):
         self.out = out
         self.texts = []
         self.start = 0.0
         self.last_end = 0.0
+        self.speaker = None
 
-    def add(self, start: float, end: float, text: str) -> None:
+    def add(self, start: float, end: float, text: str, speaker: str | None = None) -> None:
         if self.texts:
             duration = start - self.start
             sentence_ended = self.texts[-1].endswith(SENTENCE_ENDINGS)
-            if (start - self.last_end >= PARAGRAPH_PAUSE_SECONDS
+            if (speaker != self.speaker
+                    or start - self.last_end >= PARAGRAPH_PAUSE_SECONDS
                     or (duration >= PARAGRAPH_SOFT_LIMIT_SECONDS and sentence_ended)
                     or duration >= PARAGRAPH_HARD_LIMIT_SECONDS):
                 self.flush()
         if not self.texts:
             self.start = start
+            self.speaker = speaker
         self.texts.append(text)
         self.last_end = end
 
     def flush(self) -> None:
         if self.texts:
-            self.out.write(f"[{format_clock(self.start)}] {' '.join(self.texts)}\n\n")
+            label = f"{self.speaker}: " if self.speaker else ""
+            self.out.write(f"[{format_clock(self.start)}] {label}{' '.join(self.texts)}\n\n")
             self.out.flush()
             self.texts = []
+
+
+class SpeakerTimeline:
+    """Speaker turns from the diarization, looked up for words in time order. Speakers are
+    numbered by their first appearance in the transcript and labelled in the meeting's
+    language, e.g. "Говорящий 2"."""
+
+    def __init__(self, turns: list[tuple[float, float, int]], label: str):
+        self.turns = sorted(turns)
+        self.label = label
+        self.next_turn = 0
+        self.active = []
+        self.numbers = {}
+        self.previous = None
+
+    def speaker_of(self, start: float, end: float) -> str:
+        """The speaker who talks most during [start, end]; words in no turn keep the
+        previous speaker. Calls must come in time order."""
+        while self.next_turn < len(self.turns) and self.turns[self.next_turn][0] <= end:
+            self.active.append(self.turns[self.next_turn])
+            self.next_turn += 1
+        self.active = [turn for turn in self.active if turn[1] >= start]
+        best, best_overlap = None, 0.0
+        for turn_start, turn_end, speaker in self.active:
+            overlap = min(end, turn_end) - max(start, turn_start)
+            if overlap > best_overlap:
+                best, best_overlap = speaker, overlap
+        if best is None:
+            best = self.previous if self.previous is not None else (
+                self.turns[0][2] if self.turns else 0)
+        self.previous = best
+        if best not in self.numbers:
+            self.numbers[best] = len(self.numbers) + 1
+        return f"{self.label} {self.numbers[best]}"
 
 
 class SegmentFilter:
@@ -199,36 +271,203 @@ def output_base(path: str, out_dir: str | None) -> str:
     return os.path.join(directory, name)
 
 
-def split_on_pauses(segment, text: str) -> list[tuple[float, float, str]]:
-    """Splits a segment where its words are separated by a pause, so each piece carries the
-    times of what is actually said. Whisper often puts words from both sides of a long pause
-    into one segment, which would start a subtitle or paragraph minutes too early.
+def split_segment(segment, text: str, speakers: SpeakerTimeline | None
+                  ) -> list[tuple[float, float, str, str | None]]:
+    """Splits a segment where its words are separated by a pause or the speaker changes, so
+    each piece carries the times of what is actually said and one speaker. Whisper often puts
+    words from both sides of a long pause, or from two people, into one segment.
+    Returns (start, end, text, speaker label or None).
     A segment whose text the filter changed is kept whole, timed by its first and last word."""
     words = segment.words or []
     if not words:
-        return [(segment.start, segment.end, text)]
+        speaker = speakers.speaker_of(segment.start, segment.end) if speakers else None
+        return [(segment.start, segment.end, text, speaker)]
     if text != segment.text.strip():
-        return [(words[0].start, words[-1].end, text)]
-    pieces, current = [], [words[0]]
-    for word in words[1:]:
-        if word.start - current[-1].end >= WORD_PAUSE_SECONDS:
-            pieces.append(current)
+        start, end = words[0].start, words[-1].end
+        return [(start, end, text, speakers.speaker_of(start, end) if speakers else None)]
+    pieces, current, current_speaker = [], [], None
+    for word in words:
+        speaker = speakers.speaker_of(word.start, word.end) if speakers else None
+        if current and (word.start - current[-1].end >= WORD_PAUSE_SECONDS
+                        or speaker != current_speaker):
+            pieces.append((current, current_speaker))
             current = []
+        if not current:
+            current_speaker = speaker
         current.append(word)
-    pieces.append(current)
+    pieces.append((current, current_speaker))
     result = []
-    for piece in pieces:
+    for piece, speaker in pieces:
         piece_text = "".join(word.word for word in piece).strip()
         if piece_text:
-            result.append((piece[0].start, piece[-1].end, piece_text))
-    return result or [(words[0].start, words[-1].end, text)]
+            result.append((piece[0].start, piece[-1].end, piece_text, speaker))
+    return result or [(words[0].start, words[-1].end, text, current_speaker)]
+
+
+def diarize(audio, num_speakers: int) -> list[tuple[float, float, int]]:
+    """Finds who speaks when, on the CPU. num_speakers 0 means: estimate the number.
+
+    1. sherpa-onnx (pyannote segmentation + NeMo TitaNet voice embeddings) splits the speech
+       into voice groups with a low threshold, so one person often ends up in many groups.
+    2. refine_speakers() joins groups whose average voice embeddings are alike, folds tiny
+       groups into the closest person and, when the number of speakers is given, joins the
+       most alike persons until that number is left. sherpa-onnx's own fixed-count mode is not
+       used: on a 4-person recording it merged two people and kept a 0.4% noise group."""
+    import sherpa_onnx
+
+    threads = max(1, (os.cpu_count() or 2) // 2)  # leave CPU for Whisper running alongside
+    config = sherpa_onnx.OfflineSpeakerDiarizationConfig(
+        segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
+            pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(
+                model=SEGMENTATION_MODEL, window_shift_ratio=WINDOW_SHIFT_RATIO),
+            num_threads=threads),
+        embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=EMBEDDING_MODEL, num_threads=threads),
+        clustering=sherpa_onnx.FastClusteringConfig(num_clusters=-1, threshold=SPEAKER_THRESHOLD),
+        min_duration_on=0.3,
+        min_duration_off=0.5,
+    )
+    diarization = sherpa_onnx.OfflineSpeakerDiarization(config)
+    started = time.time()
+    reported = [0]
+
+    def progress(done: int, total: int) -> int:
+        percent = 100 * done // max(total, 1)
+        if percent >= reported[0] + 20:
+            reported[0] = percent - percent % 20
+            print(f"  voices {percent}%, elapsed {format_clock(time.time() - started)}", flush=True)
+        return 0
+
+    result = diarization.process(audio, callback=progress).sort_by_start_time()
+    turns = [(turn.start, turn.end, turn.speaker) for turn in result]
+    groups = len({speaker for _, _, speaker in turns})
+    turns = refine_speakers(audio, turns, num_speakers, threads)
+    print(f"Speakers: {len({speaker for _, _, speaker in turns})} (from {groups} voice groups), "
+          f"found in {format_clock(time.time() - started)}", flush=True)
+    return turns
+
+
+def refine_speakers(audio, turns: list[tuple[float, float, int]], num_speakers: int,
+                    threads: int) -> list[tuple[float, float, int]]:
+    """Joins voice groups that belong to one person; see diarize()."""
+    import numpy as np
+    import sherpa_onnx
+
+    extractor = sherpa_onnx.SpeakerEmbeddingExtractor(
+        sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=EMBEDDING_MODEL, num_threads=threads))
+
+    def embed(start: float, end: float):
+        stream = extractor.create_stream()
+        stream.accept_waveform(SAMPLE_RATE, audio[int(start * SAMPLE_RATE):int(end * SAMPLE_RATE)])
+        stream.input_finished()
+        vector = np.array(extractor.compute(stream))
+        return vector / np.linalg.norm(vector)
+
+    talk = {}
+    for start, end, speaker in turns:
+        talk[speaker] = talk.get(speaker, 0.0) + end - start
+    total = sum(talk.values()) or 1.0
+    # Average voice embedding of each group, from its longest turns (each cut to 10 s).
+    centroids = {}
+    for group in talk:
+        vectors, used = [], 0.0
+        for start, end, _ in sorted((t for t in turns if t[2] == group), key=lambda t: t[0] - t[1]):
+            if end - start < 1.0 or used >= CENTROID_SECONDS:
+                break
+            end = min(end, start + 10.0)
+            vectors.append(embed(start, end))
+            used += end - start
+        if vectors:
+            centroid = np.mean(vectors, axis=0)
+            centroids[group] = centroid / np.linalg.norm(centroid)
+
+    # Persons: lists of groups with their speech time and average embedding.
+    persons = {group: ([group], talk[group], centroids[group]) for group in centroids}
+
+    def join_most_alike(stop_below: float | None) -> bool:
+        keys = list(persons)
+        best, pair = -2.0, None
+        for i, first in enumerate(keys):
+            for second in keys[i + 1:]:
+                similarity = float(persons[first][2] @ persons[second][2])
+                if similarity > best:
+                    best, pair = similarity, (first, second)
+        if pair is None or (stop_below is not None and best < stop_below):
+            return False
+        first, second = pair
+        groups_a, time_a, vector_a = persons.pop(first)
+        groups_b, time_b, vector_b = persons.pop(second)
+        vector = vector_a * time_a + vector_b * time_b
+        persons[first] = (groups_a + groups_b, time_a + time_b, vector / np.linalg.norm(vector))
+        return True
+
+    while join_most_alike(SAME_PERSON_SIMILARITY):
+        pass
+    # Tiny groups are fragments: they go to the most alike larger person. When the number of
+    # speakers is given, that many of the most talkative persons are kept even if small, so
+    # someone who joined late or said little is not folded into another voice.
+    large = {key for key, (_, seconds, _) in persons.items() if seconds / total >= MIN_SPEAKER_SHARE}
+    if num_speakers > 0:
+        large |= set(sorted(persons, key=lambda key: persons[key][1], reverse=True)[:num_speakers])
+    if large:
+        for key in [key for key in persons if key not in large]:
+            groups, seconds, vector = persons.pop(key)
+            target = max(large, key=lambda other: float(persons[other][2] @ vector))
+            target_groups, target_seconds, target_vector = persons[target]
+            persons[target] = (target_groups + groups, target_seconds + seconds, target_vector)
+    if num_speakers > 0:
+        while len(persons) > num_speakers and join_most_alike(None):
+            pass
+
+    person_of = {group: key for key, (groups, _, _) in persons.items() for group in groups}
+    # Groups without an embedding (only very short turns) take the person speaking nearest in time.
+    known = [turn for turn in turns if turn[2] in person_of]
+    starts = [turn[0] for turn in known]
+    result = []
+    for start, end, group in turns:
+        if group in person_of:
+            result.append((start, end, person_of[group]))
+        elif known:
+            index = bisect.bisect_left(starts, start)
+            nearest = min(known[max(0, index - 1):index + 1],
+                          key=lambda turn: max(turn[0] - end, start - turn[1], 0.0))
+            result.append((start, end, person_of[nearest[2]]))
+        else:
+            result.append((start, end, group))
+    return result
+
+
+def speaker_label(language: str | None) -> str:
+    return SPEAKER_LABELS.get(language or "", "Speaker")
 
 
 def transcribe_file(model, path: str, args) -> str:
+    from faster_whisper import decode_audio
+
     started = time.time()
+    # Decoded once and shared: the voice separation needs the same 16 kHz samples.
+    audio = decode_audio(path, sampling_rate=SAMPLE_RATE)
+    # The voice separation runs on the CPU in a thread while Whisper runs (on the GPU), so it
+    # adds little time; its result is needed only when the text is written.
+    voices = {}
+    voice_thread = None
+    if args.speakers is not None:
+        count = f"{args.speakers} speakers" if args.speakers else "number of speakers unknown"
+        print(f"Separating voices ({count}) on the CPU, alongside the transcription...", flush=True)
+
+        def separate() -> None:
+            try:
+                voices["turns"] = diarize(audio, args.speakers)
+            except Exception as error:  # reported after the transcription
+                voices["error"] = error
+
+        voice_thread = threading.Thread(target=separate, daemon=True)
+        voice_thread.start()
+    multilingual = args.language == MULTILINGUAL
     segments, info = model.transcribe(
-        path,
-        language=args.language,
+        audio,
+        language=None if multilingual else args.language,
+        # With several languages, the language is detected again for every 30-second window.
+        multilingual=multilingual,
         vad_filter=True,
         beam_size=5,
         hotwords=args.hotwords,
@@ -239,8 +478,33 @@ def transcribe_file(model, path: str, args) -> str:
         # next to a long pause can start minutes before its words are said.
         word_timestamps=True,
     )
-    print(f"Language: {info.language} (p={info.language_probability:.2f}), "
+    language_note = ", several languages" if multilingual else ""
+    print(f"Language: {info.language} (p={info.language_probability:.2f}){language_note}, "
           f"duration {format_clock(info.duration)}", flush=True)
+
+    segment_filter = None if args.no_filter else SegmentFilter()
+    recognized = []  # (segment, text after the filter)
+    last_report = 0.0
+    for segment in segments:
+        text = segment.text.strip()
+        if text and segment_filter:
+            text = segment_filter.clean(text)
+        if text:
+            recognized.append((segment, text))
+        if segment.end - last_report >= 300:
+            last_report = segment.end
+            percent = 100 * segment.end / info.duration if info.duration else 0
+            print(f"  {format_clock(segment.end)} / {format_clock(info.duration)} "
+                  f"({percent:.0f}%), elapsed {format_clock(time.time() - started)}", flush=True)
+
+    speakers = None
+    if voice_thread:
+        if voice_thread.is_alive():
+            print("Waiting for the voice separation to finish...", flush=True)
+        voice_thread.join()
+        if "error" in voices:
+            raise RuntimeError(f"voice separation failed: {voices['error']}")
+        speakers = SpeakerTimeline(voices["turns"], speaker_label(info.language))
 
     base = output_base(path, args.out_dir)
     os.makedirs(os.path.dirname(base), exist_ok=True)
@@ -251,31 +515,19 @@ def transcribe_file(model, path: str, args) -> str:
     txt_partial = txt_path + PARTIAL_SUFFIX
     srt_partial = srt_path + PARTIAL_SUFFIX
     srt_file = open(srt_partial, "w", encoding="utf-8") if args.srt else None
-    last_report = 0.0
-    segment_filter = None if args.no_filter else SegmentFilter()
     kept = 0
     completed = False
     try:
         with open(txt_partial, "w", encoding="utf-8") as txt_file:
             paragraphs = ParagraphWriter(txt_file)
-            for segment in segments:
-                text = segment.text.strip()
-                if text and segment_filter:
-                    text = segment_filter.clean(text)
-                if not text:
-                    continue
-                for start, end, piece in split_on_pauses(segment, text):
+            for segment, text in recognized:
+                for start, end, piece, speaker in split_segment(segment, text, speakers):
                     kept += 1
-                    paragraphs.add(start, end, piece)
+                    paragraphs.add(start, end, piece, speaker)
                     if srt_file:
+                        label = f"{speaker}: " if speaker else ""
                         srt_file.write(f"{kept}\n{format_srt_time(start)} --> "
-                                       f"{format_srt_time(end)}\n{piece}\n\n")
-                if segment.end - last_report >= 300:
-                    last_report = segment.end
-                    percent = 100 * segment.end / info.duration if info.duration else 0
-                    print(f"  {format_clock(segment.end)} / {format_clock(info.duration)} "
-                          f"({percent:.0f}%), elapsed {format_clock(time.time() - started)}",
-                          flush=True)
+                                       f"{format_srt_time(end)}\n{label}{piece}\n\n")
             paragraphs.flush()
         completed = True
     finally:
@@ -349,12 +601,82 @@ def summarize(txt_path: str, args) -> bool:
     return True
 
 
+LANGUAGE_CHOICES = [("ru", "русский"), ("en", "английский"), ("de", "немецкий"),
+                    ("fr", "французский"), (MULTILINGUAL, "несколько языков")]
+
+
+def ask(question: str, options: list[str], enter_means: str, accept) -> object:
+    """Asks a numbered question in the console until the answer is valid. An empty answer
+    (or no console at all) returns None, the default named by enter_means."""
+    print(f"\n{question}")
+    for line in options:
+        print(f"  {line}")
+    print(f"  Enter - {enter_means}")
+    while True:
+        try:
+            answer = input("Ваш выбор: ").strip().lstrip("﻿")
+        except EOFError:
+            print()
+            return None
+        if not answer:
+            return None
+        value = accept(answer)
+        if value is not None:
+            return value
+        print("  Не понял ответ, введите номер из списка или просто нажмите Enter.")
+
+
+def number_in(low: int, high: int):
+    def accept(answer: str):
+        return int(answer) if answer.isdigit() and low <= int(answer) <= high else None
+    return accept
+
+
+def ask_for_files() -> list[str]:
+    print("Перетащите файл записи (или несколько) в это окно и нажмите Enter:")
+    try:
+        line = input("> ").lstrip("﻿")
+    except EOFError:
+        return []
+    # Explorer pastes dragged paths separated by spaces, quoted when they contain spaces.
+    return [quoted or plain for quoted, plain in re.findall(r'"([^"]+)"|(\S+)', line)]
+
+
+def ask_options(args, has_media: bool) -> None:
+    """Fills in, by numbered questions, every choice not already given as an option."""
+    if has_media and args.language is None:
+        choice = ask("Язык записи:",
+                     [f"{number} - {name}" for number, (_, name) in enumerate(LANGUAGE_CHOICES, start=1)],
+                     "не знаю, определить автоматически", number_in(1, len(LANGUAGE_CHOICES)))
+        args.language = LANGUAGE_CHOICES[choice - 1][0] if choice else None
+    if has_media and args.speakers is None:
+        choice = ask("Разделить текст по говорящим (по голосам)? Это добавит несколько минут.",
+                     ["1 - да", "2 - нет"], "нет", number_in(1, 2))
+        if choice == 1:
+            count = ask("Сколько человек говорит на записи?", ["1-20 - число говорящих"],
+                        "не знаю, определить автоматически", number_in(1, 20))
+            args.speakers = count or 0
+    if not args.summary:
+        choice = ask("Сделать выжимку через Claude? Текст расшифровки уйдёт в Claude под вашим "
+                     "аккаунтом,\nпоэтому только если правила, под которыми вы пользуетесь Claude, "
+                     "это разрешают.", ["1 - да", "2 - нет"], "нет", number_in(1, 2))
+        args.summary = choice == 1
+    print()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Offline speech-to-text for meeting recordings.")
-    parser.add_argument("inputs", nargs="+",
-                        help="audio/video files (mp4, mkv, mp3, wav, m4a, ...) or existing .txt transcripts")
+    parser.add_argument("inputs", nargs="*",
+                        help="audio/video files (mp4, mkv, mp3, wav, m4a, ...) or existing .txt "
+                             "transcripts; without any, the tool asks for them")
+    parser.add_argument("--ask", action="store_true",
+                        help="ask in the console for language, speakers and summary (what is not "
+                             "given as an option); used by drop-files-here.cmd")
     parser.add_argument("--language", default=None,
-                        help="spoken language, e.g. ru, de, en; omit to auto-detect from the first 30s")
+                        help="spoken language, e.g. ru, de, en, or 'multi' for several languages; "
+                             "omit to auto-detect from the first 30s")
+    parser.add_argument("--speakers", nargs="?", type=int, const=0, default=None, metavar="N",
+                        help="label who speaks (voice separation); N = number of speakers if known")
     parser.add_argument("--summary", action="store_true",
                         help="also write <name>.summary.md via Claude Code (sends the transcript to Claude)")
     parser.add_argument("--srt", action="store_true", help="also write .srt subtitles with exact timings")
@@ -374,6 +696,15 @@ def main() -> int:
                              "is not transcribed again, and an existing summary is kept)")
     args = parser.parse_args()
 
+    if not args.inputs:
+        if not args.ask:
+            parser.print_usage(sys.stderr)
+            return 2
+        args.inputs = ask_for_files()
+        if not args.inputs:
+            print("No file given.", file=sys.stderr)
+            return 2
+
     missing = [p for p in args.inputs + args.terms if not os.path.isfile(p)]
     for path in missing:
         print(f"File not found: {path}", file=sys.stderr)
@@ -382,6 +713,12 @@ def main() -> int:
 
     media = [p for p in args.inputs if not p.lower().endswith(".txt")]
     transcripts = [p for p in args.inputs if p.lower().endswith(".txt")]
+    if args.ask:
+        ask_options(args, bool(media))
+    if args.speakers is not None and media and not (
+            os.path.isfile(SEGMENTATION_MODEL) and os.path.isfile(EMBEDDING_MODEL)):
+        print("The voice separation models are missing. Run setup.cmd.", file=sys.stderr)
+        return 3
     if transcripts and not args.summary:
         print("A .txt input is only summarized; add --summary.", file=sys.stderr)
         return 2

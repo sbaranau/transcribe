@@ -12,10 +12,11 @@ if not exist "%TOOL_DIR%venv\Scripts\python.exe" (
     exit /b 3
 )
 if "%~1"=="" (
-    echo Usage: transcribe.cmd ^<file^> [more files] [--language ru] [--summary] [--srt] [--terms FILE] [--out-dir DIR] [--cpu] [--force]
+    echo Usage: transcribe.cmd ^<file^> [more files] [--language ru^|multi] [--speakers [N]] [--summary] [--srt] [--terms FILE] [--out-dir DIR] [--cpu] [--force]
+    echo        transcribe.cmd ^<file^> --ask                  ask for language, speakers and summary
     echo        transcribe.cmd ^<transcript.txt^> --summary     summarize an existing transcript
-    echo Existing results are kept; --force overwrites them.
-    echo Or drag files onto drop-text.cmd or drop-text-summary.cmd.
+    echo Existing results are kept; --force overwrites them. All options: transcribe.cmd --help
+    echo Or drag files onto drop-files-here.cmd, which asks the questions.
     exit /b 2
 )
 
