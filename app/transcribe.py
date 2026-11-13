@@ -43,6 +43,7 @@ import numpy as np
 
 import ai_engines
 import checker
+import screenshots
 import translation_checker
 import translator
 import ui_text
@@ -879,6 +880,11 @@ def after_transcript(txt_path: str, args) -> bool:
         ok = translate(source, base, args) and ok
     if args.summary:
         ok = summarize(source, args, base + ".summary.md") and ok
+    # Screenshots taken during the live mode (screenshots/ next to the recording): the texts
+    # again as Markdown, with each screenshot after its paragraph.
+    variants = [base + ".txt", base + ".checked.txt"]
+    variants += [f"{base}.{code}{end}" for code in translator.LANGUAGES for end in (".txt", ".checked.txt")]
+    screenshots.write_markdown_for(variants, report=lambda line: print(line, flush=True))
     return ok
 
 

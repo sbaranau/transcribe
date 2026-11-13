@@ -15,6 +15,8 @@ readable transcript with speakers and timestamps, optionally translated, checked
   pieces, nearly as accurate as transcribing the recording afterwards.
 - **Tells speakers apart** by voice ("Speaker 1", "Speaker 2", ...); on public test meetings (AMI,
   4 people) 98% of the words went to the right person when the number of speakers was given.
+- **Takes screenshots** with a button during a call (the slide or document being shown) and puts
+  each one into the transcript at its moment: `meeting.md`, readable in any Markdown viewer.
 - **Translates** between English, German and Russian locally (Opus-MT), live in a second column
   or afterwards.
 - **Optional AI steps** with an AI you have installed (Claude Code, ChatGPT through the Codex CLI,
@@ -70,6 +72,7 @@ The results of a recording go into a folder next to it:
 | `<name>.checked.txt` | with names put in and speaker borders fixed by the AI |
 | `<name>.de.txt`, `<name>.de.checked.txt` | the translation, and its AI-corrected version |
 | `<name>.summary.md` | the summary: main ideas, decisions, tasks, every date mentioned, open questions |
+| `meeting.md`, `screenshots/` | with screenshots taken during the call: the transcript as Markdown with each screenshot at its moment |
 
 From a terminal, `windows\transcribe.cmd` takes the same choices as options, for example:
 

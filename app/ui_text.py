@@ -184,6 +184,20 @@ TEXTS = {
                               "Проверить перевод с помощью ИИ: смысл, числа, имена"),
     "win.translation": ("translation", "Übersetzung", "Перевод"),
     "win.checked_translation": ("checked translation", "geprüfte Übersetzung", "Проверенный перевод"),
+    "win.shots_of": ("Screenshots of:", "Bildschirmfotos von:", "Снимки экрана:"),
+    "win.screen_n": ("Screen {n} ({w}×{h})", "Bildschirm {n} ({w}×{h})", "Экран {n} ({w}×{h})"),
+    "win.screen_all": ("All screens", "Alle Bildschirme", "Все экраны"),
+    "win.shots_note": ("Taken with a button during the recording and put into the text at their moment "
+                       "(meeting.md). They stay on this computer.",
+                       "Per Knopf während der Aufnahme, im Text an ihrer Stelle eingefügt (meeting.md). "
+                       "Sie bleiben auf diesem Computer.",
+                       "Делаются кнопкой во время записи и встают в текст в свой момент (meeting.md). "
+                       "Остаются на этом компьютере."),
+    "win.shot": ("📷  Screenshot", "📷  Bildschirmfoto", "📷  Снимок экрана"),
+    "win.shots_count": ("{n} taken", "{n} aufgenommen", "сделано: {n}"),
+    "win.shot_failed": ("Screenshot failed: {error}", "Bildschirmfoto fehlgeschlagen: {error}",
+                        "Снимок не удался: {error}"),
+    "win.text_with_shots": ("text with screenshots", "Text mit Bildschirmfotos", "Текст со снимками"),
     "win.folder": ("Folder:", "Ordner:", "Папка:"),
     "win.date_time": ("<date time>", "<Datum Uhrzeit>", "<дата время>"),
     "win.tell_people": ("Tell the participants that the meeting is transcribed.",

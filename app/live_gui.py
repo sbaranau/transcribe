@@ -5,7 +5,8 @@
 2. During: recording light and timer, sound levels of the microphone and the computer, the text
    with timestamps (auto-scrolling unless you scrolled up), the unfinished phrase as a grey draft;
    with a translation chosen, the translation in a second column (translator.LiveTranslator);
-   Stop, open folder, copy text, text size.
+   Stop, screenshot (screenshots.py; a mark in the text after the paragraph it belongs to), open
+   folder, copy text, text size.
 3. After: the full processing as check boxes (transcribe again, speakers, check, summary, which
    AI, delete the sound), its progress, and buttons to open the results. The processing runs as
    a child process, so it can be stopped; its settings are locked meanwhile.
@@ -28,6 +29,7 @@ from tkinter import font as tkfont, messagebox, ttk
 
 import ai_engines
 import live
+import screenshots
 import transcribe as tool
 import translator
 import ui_text
@@ -58,6 +60,9 @@ class App:
         self.processing = None  # the child process of the full processing while it runs
         self.live_translator = None
         self.translation_text = None
+        self.pending_shots = []  # (seconds, path) whose mark waits for the end of its paragraph
+        self.shot_count = 0
+        self.shot_savers = []
         self.cancelled = False
         self.events = queue.Queue()
         self.model = self.hotwords = self.session = None
@@ -168,15 +173,37 @@ class App:
         ttk.Label(box, text=t("win.all_devices"),
                   style="Note.TLabel", wraplength=520).pack(anchor="w")
 
-        ttk.Label(frame, text=t("win.folder")).grid(row=4, column=0, sticky="w", pady=3)
+        # Screenshots with a button during the recording: of which screen.
+        self.screens = []
+        if screenshots.SUPPORTED:
+            try:
+                found = screenshots.monitors()
+            except Exception:
+                found = []
+            self.screens = [(t("win.screen_n", n=n, w=r[2] - r[0], h=r[3] - r[1]), r)
+                            for n, r in enumerate(found, start=1)]
+            if len(found) > 1:
+                self.screens.append((t("win.screen_all"), screenshots.all_screens(found)))
+        if self.screens:
+            ttk.Label(frame, text=t("win.shots_of")).grid(row=4, column=0, sticky="nw", pady=(6, 3))
+            line = ttk.Frame(frame)
+            line.grid(row=4, column=1, sticky="w", pady=3)
+            self.screen_choice = ttk.Combobox(line, state="readonly", width=34,
+                                              values=[name for name, _ in self.screens])
+            wanted = remembered.get("screen", "")
+            self.screen_choice.current(int(wanted) if wanted.isdigit() and int(wanted) < len(self.screens) else 0)
+            self.screen_choice.pack(anchor="w")
+            ttk.Label(line, text=t("win.shots_note"), style="Note.TLabel", wraplength=520).pack(anchor="w", pady=(2, 0))
+
+        ttk.Label(frame, text=t("win.folder")).grid(row=5, column=0, sticky="w", pady=3)
         self.folder_label = ttk.Label(frame, text=os.path.join(self.base_folder, t("win.date_time")))
-        self.folder_label.grid(row=4, column=1, sticky="w", pady=3)
+        self.folder_label.grid(row=5, column=1, sticky="w", pady=3)
 
         ttk.Label(frame, text=t("win.tell_people"),
-                  foreground=RED).grid(row=5, column=0, columnspan=2, sticky="w", pady=(8, 4))
+                  foreground=RED).grid(row=6, column=0, columnspan=2, sticky="w", pady=(8, 4))
         self.start_button = ttk.Button(frame, text=t("win.start"), style="Big.TButton",
                                        command=self.start, state="disabled")
-        self.start_button.grid(row=6, column=0, columnspan=2, sticky="w", pady=(6, 0))
+        self.start_button.grid(row=7, column=0, columnspan=2, sticky="w", pady=(6, 0))
         return frame
 
     @staticmethod
@@ -202,7 +229,8 @@ class App:
         microphone = self.microphone.get()
         return {"language": self.languages[self.language.current()][0] or "",
                 "microphone": microphone if microphone in self.microphones else NO_MICROPHONE,
-                "translate": self.targets[self.translate_to.current()][0] or ""}
+                "translate": self.targets[self.translate_to.current()][0] or "",
+                "screen": str(self.screen_choice.current()) if self.screens else ""}
 
     def change_interface(self, _event=None) -> None:
         code = list(ui_text.LANGUAGES)[self.interface.current()]
@@ -268,6 +296,11 @@ class App:
         frame = ttk.Frame(self.root)
         self.stop_button = ttk.Button(frame, text=t("win.stop"), style="Big.TButton", command=self.stop)
         self.stop_button.pack(side="left")
+        if screenshots.SUPPORTED:
+            self.shot_button = ttk.Button(frame, text=t("win.shot"), command=self.take_screenshot)
+            self.shot_button.pack(side="left", padx=(12, 0))
+            self.shot_note = ttk.Label(frame, text="", style="Note.TLabel")
+            self.shot_note.pack(side="left", padx=(6, 0))
         ttk.Button(frame, text=t("win.open_folder"), command=self.open_folder).pack(side="left", padx=(12, 0))
         ttk.Button(frame, text=t("win.copy"), command=self.copy_text).pack(side="left", padx=(6, 0))
         ttk.Button(frame, text="A+", width=4, command=lambda: self.change_size(1)).pack(side="right")
@@ -285,6 +318,7 @@ class App:
             text.tag_configure("info", foreground=GREY, font=(FONT, max(8, self.text_size - 3), "italic"))
             text.tag_configure("me", foreground="#1565c0", font=(FONT, self.text_size, "bold"))
             text.tag_configure("others", foreground="#2e7d32", font=(FONT, self.text_size, "bold"))
+            text.tag_configure("shot", foreground="#1565c0", underline=True, font=(FONT, max(8, self.text_size - 2)))
             for number, colour in enumerate(VOICE_COLOURS):
                 text.tag_configure(f"voice{number}", foreground=colour, font=(FONT, self.text_size, "bold"))
 
@@ -350,6 +384,54 @@ class App:
                 on_info=lambda message: self.events.put(("translation_info", message)))
             self.live_translator.start()
 
+    def take_screenshot(self) -> None:
+        """The chosen screen at this moment of the recording. If this window covers that screen,
+        it steps aside for a moment so the screenshot shows the call, not this window."""
+        if not self.session or self.session.stopping.is_set():
+            return
+        seconds = self.session.seconds
+        path = screenshots.new_path(self.folder, seconds)
+        open(path + ".partial", "wb").close()  # reserves the name until the PNG is written
+        rect = self.screens[self.screen_choice.current()][1]
+        hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
+        hide = screenshots.overlaps(rect, screenshots.window_rect(hwnd))
+        self.shot_button.configure(state="disabled")
+        if hide:
+            self.root.withdraw()
+        self.root.after(350 if hide else 0, lambda: self.capture_screen(rect, path, seconds, hide))
+
+    def capture_screen(self, rect, path: str, seconds: float, hidden: bool) -> None:
+        try:
+            pixels = screenshots.capture(rect)
+        except Exception as error:
+            pixels = None
+            os.remove(path + ".partial")
+            self.add_info(t("win.shot_failed", error=error))
+        finally:
+            if hidden:
+                self.root.deiconify()
+            self.shot_button.configure(state="normal")
+        if pixels is None:
+            return
+        saver = threading.Thread(target=screenshots.save_png, args=(pixels, path), daemon=True)
+        saver.start()
+        self.shot_savers.append(saver)
+        self.shot_count += 1
+        self.shot_note.configure(text=t("win.shots_count", n=self.shot_count))
+        self.pending_shots.append((seconds, path))
+
+    def add_shot_marks(self, before: float | None) -> None:
+        """The marks of the screenshots taken before `before` (all when None), as their own lines
+        after the paragraph that was being said."""
+        while self.pending_shots and (before is None or self.pending_shots[0][0] < before):
+            seconds, path = self.pending_shots.pop(0)
+            tag = f"shot{self.shot_count}_{int(seconds * 1000)}"
+            self.text.tag_bind(tag, "<Button-1>", lambda _e, p=path: tool.open_path(p))
+            self.text.tag_bind(tag, "<Enter>", lambda _e: self.text.configure(cursor="hand2"))
+            self.text.tag_bind(tag, "<Leave>", lambda _e: self.text.configure(cursor=""))
+            gap = "\n\n" if self.text.compare("draft", ">", "1.0") else ""
+            self.append_final(gap, (), f"📷 {tool.format_clock(seconds)}", ("shot", tag))
+
     def set_levels(self, microphone: float, computer: float) -> None:
         self.levels = (max(microphone, self.levels[0] * 0.6), max(computer, self.levels[1] * 0.6))
 
@@ -364,6 +446,13 @@ class App:
         self.session.stop()
         if self.live_translator:
             self.live_translator.finish()  # translates what is still waiting
+        for saver in self.shot_savers:
+            saver.join()
+        if self.shot_savers:
+            folder = os.path.dirname(self.session.txt_path)
+            screenshots.write_markdown_for(
+                [self.session.txt_path] + [os.path.join(folder, f"meeting.live.{code}.txt") for code in translator.LANGUAGES],
+                report=lambda line: print(line, flush=True))
         self.events.put(("stopped", None))
         self.session.stopping.set()
 
@@ -395,7 +484,8 @@ class App:
         if self.live_translator:
             self.live_translator.add(start, label, text, new_paragraph, self.label_tag(label) if label else None)
         if new_paragraph:
-            gap = "\n\n" if self.last_end is not None else ""
+            self.add_shot_marks(before=start)
+            gap = "\n\n" if self.text.compare("draft", ">", "1.0") else ""
             name = (f"{label}: ", (self.label_tag(label),)) if label else ("", ())
             self.append_final(gap, (), f"[{tool.format_clock(start)}]  ", ("time",), *name, text, ())
             self.paragraph_start = start
@@ -748,7 +838,9 @@ class App:
         self.lock_after(False)
         for child in self.result_buttons.winfo_children():
             child.destroy()
-        results = [("meeting.checked.txt", "win.checked_text"), ("meeting.txt", "win.text")]
+        results = [("meeting.checked.md", "win.text_with_shots"), ("meeting.md", "win.text_with_shots"),
+                   ("meeting.checked.txt", "win.checked_text"), ("meeting.txt", "win.text"),
+                   ("meeting.live.md", "win.text_with_shots")]
         for code in translator.LANGUAGES:
             results += [(f"meeting.{code}.checked.txt", "win.checked_translation"), (f"meeting.{code}.txt", "win.translation"),
                         (f"meeting.live.{code}.checked.txt", "win.checked_translation"),
@@ -784,6 +876,7 @@ class App:
                 elif kind == "info":
                     self.add_info(data)
                 elif kind == "stopped":
+                    self.add_shot_marks(before=None)
                     self.show_after()
                 elif kind == "ai":
                     self.show_ai(*data)

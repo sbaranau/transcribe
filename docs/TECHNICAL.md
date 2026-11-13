@@ -200,6 +200,33 @@ author. Not yet tested: a long meeting, a computer without an NVIDIA GPU. Speake
 only in the full processing afterwards; participants should be told that the meeting is
 transcribed.
 
+## Screenshots
+
+In the live window, "Screenshots of" picks a screen (or all screens) before the start; the
+"Screenshot" button then captures it (`app\screenshots.py`):
+
+- Capture: GDI `BitBlt` with `CAPTUREBLT` from the screen, in physical pixels: the capturing
+  thread switches to per-monitor DPI awareness (`SetThreadDpiAwarenessContext`) for the call, so
+  screens with different scaling (a 4K screen at 150% next to a 1080p one at 100%) are captured
+  whole, while the window keeps its own DPI handling. PNG is written with numpy and zlib, in a
+  thread; no image package. Measured on a 4K screen: 0.3 s capture, 0.3 s PNG, about 260 KB.
+- If the window overlaps the chosen screen, it is withdrawn for 350 ms during the capture, so the
+  screenshot shows the call; on a second screen it stays put.
+- Name and time: `screenshots/<hh-mm-ss>.png` (`-2`, `-3` within one second) from the session's
+  clock at the click, the same clock as the transcript's timestamps.
+- Placement: a screenshot belongs after the last paragraph that started at or before it. The
+  window shows a clickable mark "📷 hh:mm:ss" there as soon as the next paragraph starts (the
+  final text comes 20-30 s later than the screen), the rest at Stop. `write_markdown` applies
+  the same rule to any transcript in that folder: `meeting.live.md` at Stop (and
+  `meeting.live.<lang>.md` for a live translation), and after the full processing
+  `meeting.md`, `meeting.checked.md`, `meeting.<lang>.md`, `meeting.<lang>.checked.md`, with the
+  paragraphs of the new transcript.
+- Screenshots are never sent to an AI. Windows only for now.
+
+Tested in the window with a synthetic capture (window withdrawn for each capture, marks after the
+right paragraphs, two in one second, meeting.live.md) and through the full processing with a
+translation (meeting.md and meeting.de.md with the screenshots between the new paragraphs).
+
 ## Translation
 
 `--translate en|de|ru` (a question with `--ask`, a check box in the live window's after panel)
@@ -431,6 +458,7 @@ The top level holds only the shortcuts and the guides; the scripts are in `windo
 | `app\shortcuts.py` | Windows shortcuts with icons: in the tool folder and in Send To |
 | `app\ui_text.py` | the interface texts in English, German and Russian, and how the language is chosen |
 | `app\translator.py` | local translation (Opus-MT in ONNX), also during the live mode |
+| `app\screenshots.py` | screenshots during the live mode and the transcript as Markdown with them |
 | `app\translation_checker.py`, `app\translation_check_prompt.md` | the AI check of a translation; the instructions it gets |
 | `app\icons\` | `transcribe`, `live`, `setup` as `.ico` (Windows) and `.png` (Linux, window icon); `make_icons.py` draws them |
 | `app\requirements.txt` | pinned packages (`av` must stay below 15 for faster-whisper 1.2.1) |
