@@ -182,7 +182,7 @@ def check_file(txt_path: str, engine: str, location: str, force: bool, report=pr
     summary = (f"names: {named}; {stats['applied']} pieces given to another speaker "
                f"({stats['not_found']} suggestions not found in the text and skipped); "
                f"{stats['joined']} cut sentences and paragraphs joined")
-    header = (f"# Checked with {ai_engines.TITLES[engine]}: {summary}. "
+    header = (f"# Checked with {ai_engines.title(engine)}: {summary}. "
               f"The machine transcript without these changes: {os.path.basename(txt_path)}")
     with open(checked_path, "w", encoding="utf-8") as out:
         out.write(header + "\n\n")

@@ -77,6 +77,19 @@ file to search afresh.
 **Live**: the "Расшифровка встречи на лету" shortcut transcribes a meeting while it happens, without a video
 recording; see "Live mode" below.
 
+**Interface language**: English, German or Russian (`app\ui_text.py`, one table of about 130 texts):
+the live window, the console questions, and the names of the shortcuts, the Send To entry and the
+Linux menu entries ("Transcribe a recording" / "Aufnahme transkribieren" / "Расшифровать запись",
+...). It is, in this order: `--ui-language en|de|ru` (remembered), the last choice
+(`app\ui.local.ini`, `[ui] language`), the language of shortcuts already in the tool folder (so an
+installation from before 2026-11-13 stays Russian on an English Windows), the system's display
+language (`GetUserDefaultUILanguage` on Windows, `LC_ALL` / `LC_MESSAGES` / `LANG` on Linux), else
+English. The window has a selector at the top right before the recording starts; a change rebuilds
+the window around the already loaded model. Any change renames the existing shortcuts and entries
+(`shortcuts.rename_existing`), so there is never a second set. The transcript, the speaker labels
+and the summary follow the meeting's language, not this one; progress messages and errors stay in
+English.
+
 Optionally the drop script is in the Explorer **Send To** menu (right-click a recording, Send
 To, "Расшифровать", with the same icon). `windows\setup.cmd` asks whether to add it;
 `windows\send-to-menu.cmd add|remove|status` changes it later. Only the tool's own shortcut in
@@ -113,8 +126,12 @@ no extra package) on the engine in `app\live.py`:
   the user scrolled up ("↓ К концу" then); the unfinished phrase of each side as a grey italic
   draft, refreshed about every 2 s; Stop, open folder, copy text, text size.
 - **After**: the full processing as check boxes (transcribe again, speakers and how many, check,
-  summary, which of the AI tools found, or a path; delete the sound), run in a thread with its
-  output in the window, and buttons to open the results. Closing the window while recording asks,
+  summary, which of the AI tools found, or a path; delete the sound), run as a child process
+  (`transcribe.py` with the matching options) whose output goes into the window, and buttons to
+  open the results. While it runs, the settings are locked and Run becomes "Stop processing",
+  which ends the process tree (`taskkill /T` on Windows, the process group on Linux), so an AI
+  tool it started stops too; finished files stay, a `.partial` transcript is removed, the sound
+  is kept. Close is at the bottom right. Closing the window while recording or processing asks,
   then stops properly.
 
 Engine: the microphone and, through WASAPI loopback on Windows or the sink's `.monitor` source of
@@ -325,7 +342,7 @@ bash ~/transcribe/linux/setup.sh
   that holds a Windows `app\venv` (one folder cannot serve both, e.g. through `/mnt/c` in WSL);
   asks whether to add the menu entries.
 - `menu.sh add|remove|status`: `.desktop` entries in `~/.local/share/applications` with the same
-  icons; "Расшифровать запись" (terminal) is also offered under Open With for common audio and
+  icons, written by `app/shortcuts.py` (`menu-add`, ...) and named in the interface language; "Расшифровать запись" (terminal) is also offered under Open With for common audio and
   video types.
 - `transcribe.sh`: puts the pip-installed NVIDIA libraries (`nvidia/*/lib`) on `LD_LIBRARY_PATH`
   before Python starts (CTranslate2 finds cuBLAS/cuDNN only there), then runs the tool.
@@ -352,7 +369,7 @@ The top level holds only the shortcuts and the guides; the scripts are in `windo
 | `windows\setup.cmd` | installs `uv` with winget if missing; builds `app\python\`, `app\venv\` and `app\models\`; makes the shortcuts; asks about the Send To menu; moves an old top-level layout into `app\` |
 | `windows\send-to-menu.cmd` | add or remove the Send To menu entry |
 | `windows\transcribe.cmd` | command-line entry point |
-| `linux/` | `setup.sh`, `drop-files-here.sh`, `live-transcribe.sh`, `transcribe.sh`, `menu.sh` |
+| `linux/` | `setup.sh`, `drop-files-here.sh`, `live-transcribe.sh`, `transcribe.sh`, `menu.sh` (menu entries, made by `app/shortcuts.py`) |
 | `ИНСТРУКЦИЯ.md`, `README.md` | user guide in Russian, this file |
 | `terms.txt` | your terms for Whisper (optional, not in git) |
 | `app\transcribe.py` | the tool |
@@ -363,9 +380,10 @@ The top level holds only the shortcuts and the guides; the scripts are in `windo
 | `app\summary_notes_prompt.md` | notes per part of a long transcript, for local models |
 | `app\download_models.py` | model download |
 | `app\shortcuts.py` | Windows shortcuts with icons: in the tool folder and in Send To |
+| `app\ui_text.py` | the interface texts in English, German and Russian, and how the language is chosen |
 | `app\icons\` | `transcribe`, `live`, `setup` as `.ico` (Windows) and `.png` (Linux, window icon); `make_icons.py` draws them |
 | `app\requirements.txt` | pinned packages (`av` must stay below 15 for faster-whisper 1.2.1) |
-| `app\ai.local.ini`, `app\ui.local.ini` | where the summary AI was found, if a path was entered; the live window's last language and microphone (not in git) |
+| `app\ai.local.ini`, `app\ui.local.ini` | where the summary AI was found, if a path was entered; the interface language, the live window's last meeting language and microphone (not in git) |
 | `app\python\` | private Python 3.12 (installed by uv) |
 | `app\venv\` | virtual environment with the packages and the NVIDIA CUDA libraries |
 | `app\models\large-v3-turbo\` | the Whisper model, so it works offline |

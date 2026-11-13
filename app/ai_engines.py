@@ -20,11 +20,13 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from ui_text import t
+
 TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
 SETTINGS_FILE = os.path.join(TOOL_DIR, "ai.local.ini")
 NOTES_PROMPT_FILE = os.path.join(TOOL_DIR, "summary_notes_prompt.md")
 ENGINES = ["claude", "codex", "local"]
-TITLES = {"claude": "Claude (Claude Code)", "codex": "ChatGPT (Codex CLI)", "local": "локальная модель"}
+TITLES = {"claude": "Claude (Claude Code)", "codex": "ChatGPT (Codex CLI)"}
 # Default ports of local model servers; a different one can be entered as an address.
 LOCAL_SERVERS = ["http://127.0.0.1:11434", "http://127.0.0.1:1234"]  # Ollama, LM Studio
 # Local models have small context windows: longer transcripts are summarized in parts of about
@@ -147,11 +149,15 @@ def classify(entered: str) -> tuple[str, str] | None:
 ACCOUNTS: dict[str, str] = {}
 
 
+def title(engine: str) -> str:
+    return TITLES.get(engine) or t("ai.local")
+
+
 def check_login(engine: str, location: str) -> tuple[bool | None, str]:
     """Whether the tool is logged in, without sending a request to the AI: (True, account),
     (False, what to do), or (None, why it could not be told) for versions without the command."""
     if engine == "local":
-        return (True, "") if local_models(location) else (False, "сервер не отвечает")
+        return (True, "") if local_models(location) else (False, t("login.server"))
     command = [location, "auth", "status"] if engine == "claude" else [location, "login", "status"]
     try:
         result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8",
@@ -163,16 +169,16 @@ def check_login(engine: str, location: str) -> tuple[bool | None, str]:
         try:
             status = json.loads(result.stdout)
         except ValueError:
-            return None, "вход не проверен (старая версия Claude Code)"
+            return None, t("login.old_claude")
         if not status.get("loggedIn"):
-            return False, "вход не выполнен: запустите claude и войдите (/login)"
+            return False, t("login.claude")
         account = status.get("email") or status.get("orgName") or ""
         return True, account
     if result.returncode == 0 and "logged in" in output.lower():
         return True, output.split("using", 1)[-1].strip() if "using" in output else ""
     if "not logged in" in output.lower() or result.returncode != 0:
-        return False, "вход не выполнен: выполните codex login"
-    return None, "вход не проверен"
+        return False, t("login.codex")
+    return None, t("login.unknown")
 
 
 def verify_engines(found: dict[str, str]) -> tuple[dict[str, str], dict[str, str]]:
@@ -194,9 +200,9 @@ def describe(engine: str, location: str) -> str:
     if engine == "local":
         models = local_models(location)
         model = load_settings().get("local", "model", fallback=None) or (models[0] if models else "?")
-        return f"{TITLES[engine]}: {model} ({location})"
+        return f"{title(engine)}: {model} ({location})"
     account = ACCOUNTS.get(engine)
-    return f"{TITLES[engine]} — {account}" if account else TITLES[engine]
+    return f"{title(engine)} — {account}" if account else title(engine)
 
 
 # --- calls -----------------------------------------------------------------------------------

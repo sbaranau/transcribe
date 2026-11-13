@@ -41,6 +41,8 @@ import numpy as np
 
 import ai_engines
 import checker
+import ui_text
+from ui_text import t
 
 TOOL_DIR = os.path.dirname(os.path.abspath(__file__))  # app\: code, prompts, models
 ROOT_DIR = os.path.dirname(TOOL_DIR)  # the folder people open: scripts, guides, terms.txt
@@ -710,7 +712,7 @@ def summarize(txt_path: str, args, summary_path: str | None = None) -> bool:
         return False
 
     with open(summary_path, "w", encoding="utf-8") as summary_file:
-        summary_file.write(f"<!-- Summary of {os.path.basename(txt_path)}, made by {ai_engines.TITLES[engine]}; "
+        summary_file.write(f"<!-- Summary of {os.path.basename(txt_path)}, made by {ai_engines.title(engine)}; "
                            f"check it against the transcript. -->\n\n")
         summary_file.write(text + "\n")
     print(f"Summary done in {format_clock(time.time() - started)}: {summary_path}", flush=True)
@@ -722,18 +724,17 @@ def choose_ai(args, interactive: bool) -> bool:
     the first installed one. Returns False if there is none (the check and the summary are
     then skipped)."""
     if interactive:
-        print("\nИщу установленные ИИ (Claude Code, Codex (ChatGPT), локальные модели Ollama и "
-              "LM Studio) и проверяю, выполнен ли в них вход...", flush=True)
+        print(t("ai.searching_console"), flush=True)
     else:
         print("Looking for the installed AI tools and checking their login...", flush=True)
     started = time.time()
     found, left_out = ai_engines.verify_engines(ai_engines.find_engines())
     for engine, reason in left_out.items():
-        print(f"  {ai_engines.TITLES[engine]}: установлен, но {reason}" if interactive
-              else f"  {ai_engines.TITLES[engine]} left out: {reason}", flush=True)
+        print("  " + t("ai.installed_but", title=ai_engines.title(engine), reason=reason) if interactive
+              else f"  {ai_engines.title(engine)} left out: {reason}", flush=True)
     if interactive:
-        names = ", ".join(ai_engines.describe(engine, found[engine]) for engine in found) or "ничего"
-        print(f"Готово к работе ({time.time() - started:.0f} с): {names}.", flush=True)
+        names = ", ".join(ai_engines.describe(engine, found[engine]) for engine in found) or t("ai.nothing")
+        print(t("ai.ready", seconds=f"{time.time() - started:.0f}", names=names), flush=True)
     if args.ai:
         if args.ai in found:
             args.ai_engine, args.ai_location = args.ai, found[args.ai]
@@ -746,9 +747,9 @@ def choose_ai(args, interactive: bool) -> bool:
         return True
     if found:
         engines = list(found)
-        choice = ask("Какой ИИ использовать?",
+        choice = ask(t("ai.which"),
                      [f"{n} - {ai_engines.describe(e, found[e])}" for n, e in enumerate(engines, start=1)],
-                     f"{ai_engines.TITLES[engines[0]]}", number_in(1, len(engines)))
+                     ai_engines.title(engines[0]), number_in(1, len(engines)))
         engine = engines[(choice or 1) - 1]
         args.ai_engine, args.ai_location = engine, found[engine]
         return True
@@ -756,15 +757,13 @@ def choose_ai(args, interactive: bool) -> bool:
         print("No AI found (Claude Code, Codex, or a local model server); the check and the "
               "summary are skipped.", file=sys.stderr)
         return False
-    print("\nНе найден ни Claude Code, ни Codex (ChatGPT), ни локальная модель (Ollama, LM Studio).")
+    print(t("ai.none_found"))
     while True:
-        choice = ask("Что сделать?", ["1 - отменить проверку и выжимку (текст всё равно будет)",
-                                      "2 - указать путь к установленному ИИ"],
-                     "отменить", number_in(1, 2))
+        choice = ask(t("ai.what_now"), [t("ai.option_skip"), t("ai.option_path")], t("ai.skip"),
+                     number_in(1, 2))
         if choice != 2:
             return False
-        print("Путь к claude или codex (можно папку с ним), или адрес локального сервера,\n"
-              "например http://127.0.0.1:11434:")
+        print(t("ai.path_prompt"))
         try:
             entered = input("> ").lstrip("﻿")
         except EOFError:
@@ -773,17 +772,13 @@ def choose_ai(args, interactive: bool) -> bool:
         if result:
             usable, left_out = ai_engines.verify_engines(dict([result]))
             if not usable:
-                print(f"  Найден, но {left_out[result[0]]}.")
+                print(t("ai.found_but", reason=left_out[result[0]]))
                 continue
             args.ai_engine, args.ai_location = result
             ai_engines.remember(*result)
-            print(f"Найдено: {ai_engines.describe(*result)}. Путь запомнен для следующих запусков.")
+            print(t("ai.found_saved", name=ai_engines.describe(*result)))
             return True
-        print("  По этому пути не нашёлся ни claude, ни codex, и локальный сервер не отвечает.")
-
-
-LANGUAGE_CHOICES = [("ru", "русский"), ("en", "английский"), ("de", "немецкий"),
-                    ("fr", "французский"), (MULTILINGUAL, "несколько языков")]
+        print(t("ai.path_wrong"))
 
 
 def ask(question: str, options: list[str], enter_means: str, accept) -> object:
@@ -795,7 +790,7 @@ def ask(question: str, options: list[str], enter_means: str, accept) -> object:
     print(f"  Enter - {enter_means}")
     while True:
         try:
-            answer = input("Ваш выбор: ").strip().lstrip("﻿")
+            answer = input(t("your_choice")).strip().lstrip("﻿")
         except EOFError:
             print()
             return None
@@ -804,7 +799,11 @@ def ask(question: str, options: list[str], enter_means: str, accept) -> object:
         value = accept(answer)
         if value is not None:
             return value
-        print("  Не понял ответ, введите номер из списка или просто нажмите Enter.")
+        print(t("not_understood"))
+
+
+def yes_no() -> list[str]:
+    return [f"1 - {t('yes')}", f"2 - {t('no')}"]
 
 
 def number_in(low: int, high: int):
@@ -814,7 +813,7 @@ def number_in(low: int, high: int):
 
 
 def ask_for_files() -> list[str]:
-    print("Перетащите файл записи (или несколько) в это окно и нажмите Enter:")
+    print(t("drop_files"))
     try:
         line = input("> ").lstrip("﻿")
     except EOFError:
@@ -826,30 +825,25 @@ def ask_for_files() -> list[str]:
 def ask_options(args, has_media: bool) -> None:
     """Fills in, by numbered questions, every choice not already given as an option."""
     if has_media and args.language is None:
-        choice = ask("Язык записи:",
-                     [f"{number} - {name}" for number, (_, name) in enumerate(LANGUAGE_CHOICES, start=1)],
-                     "не знаю, определить автоматически", number_in(1, len(LANGUAGE_CHOICES)))
-        args.language = LANGUAGE_CHOICES[choice - 1][0] if choice else None
+        choices = ui_text.meeting_languages()
+        choice = ask(t("ask.language"),
+                     [f"{number} - {name}" for number, (_, name) in enumerate(choices, start=1)],
+                     t("ask.detect"), number_in(1, len(choices)))
+        args.language = choices[choice - 1][0] if choice else None
     if has_media and args.speakers is None:
-        choice = ask("Разделить текст по говорящим (по голосам)? Это добавит несколько минут.",
-                     ["1 - да", "2 - нет"], "нет", number_in(1, 2))
+        choice = ask(t("ask.split"), yes_no(), t("no"), number_in(1, 2))
         if choice == 1:
-            count = ask("Сколько человек говорит на записи?", ["1-20 - число говорящих"],
-                        "не знаю, определить автоматически", number_in(1, 20))
+            count = ask(t("ask.count"), [t("ask.count_option")], t("ask.detect"), number_in(1, 20))
             args.speakers = count or 0
     labelled = args.speakers is not None if has_media else args.labelled_input
     if labelled and not args.check:
-        choice = ask("Проверить текст с помощью ИИ? ИИ подставит имена вместо «Говорящий N», где люди\n"
-                     "представились или к ним обратились по имени, и исправит разорванные между\n"
-                     "говорящими фразы. Исходный текст сохранится, исправленный будет в <имя>.checked.txt.",
-                     ["1 - да", "2 - нет"], "нет", number_in(1, 2))
+        choice = ask(t("ask.check"), yes_no(), t("no"), number_in(1, 2))
         args.check = choice == 1
     if not args.summary:
-        choice = ask("Сделать выжимку с помощью ИИ?", ["1 - да", "2 - нет"], "нет", number_in(1, 2))
+        choice = ask(t("ask.summary"), yes_no(), t("no"), number_in(1, 2))
         args.summary = choice == 1
     if args.check or args.summary:
-        print("\nДля проверки и выжимки текст расшифровки уйдёт в выбранный ИИ под вашим аккаунтом\n"
-              "(у локальной модели останется на компьютере), поэтому только если ваши правила это разрешают.")
+        print(t("ask.ai_rules"))
         if not choose_ai(args, interactive=True):
             args.check = args.summary = False
     print()
@@ -878,6 +872,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--live", action="store_true",
                         help="transcribe a meeting while it happens, from the computer's sound and "
                              "the microphone, in a window (live-transcribe)")
+    parser.add_argument("--ui-language", choices=list(ui_text.LANGUAGES), default=None,
+                        help="language of the questions and the window: en, de or ru (remembered; "
+                             "default: the one chosen last, else the system's)")
     parser.add_argument("--console", action="store_true",
                         help="with --live: no window, text in the console, Enter stops it")
     parser.add_argument("inputs", nargs="*",
@@ -918,6 +915,12 @@ def main(argv: list[str] | None = None) -> int:
                              "is not transcribed again, and an existing summary is kept)")
     args = parser.parse_args(argv)
     args.ai_engine = args.ai_location = None
+    if args.ui_language:
+        ui_text.set_language(args.ui_language)
+        if args.ui_language != ui_text.saved_language():
+            ui_text.save_language(args.ui_language)
+            import shortcuts
+            shortcuts.rename_existing()
     if args.live:
         import live
         return live.run(args)

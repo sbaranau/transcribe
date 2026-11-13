@@ -35,6 +35,7 @@ from datetime import datetime
 import numpy as np
 
 import transcribe as tool
+from ui_text import meeting_languages, t
 
 RATE = 16000
 BLOCK = RATE // 4  # 0.25 s per read
@@ -626,10 +627,10 @@ def run(args) -> int:
 def run_console(args) -> int:
     report = lambda line: print(line, flush=True)
     if args.ask and args.language is None:
-        choice = tool.ask("Язык встречи:",
-                          [f"{n} - {name}" for n, (_, name) in enumerate(tool.LANGUAGE_CHOICES, start=1)],
-                          "не знаю, определить по первым фразам", tool.number_in(1, len(tool.LANGUAGE_CHOICES)))
-        args.language = tool.LANGUAGE_CHOICES[choice - 1][0] if choice else None
+        choices = meeting_languages()
+        choice = tool.ask(t("live.language"), [f"{n} - {name}" for n, (_, name) in enumerate(choices, start=1)],
+                          t("live.detect"), tool.number_in(1, len(choices)))
+        args.language = choices[choice - 1][0] if choice else None
     folder = args.out_dir or new_folder()
     model, hotwords = load_whisper(args, report)
     _, microphone, speakers = list_devices()
@@ -644,7 +645,7 @@ def run_console(args) -> int:
     for source in session.sources:
         report(f"  {source.name}")
     report(f"Saving to: {folder}")
-    print("\n=== Идёт запись и расшифровка. Нажмите Enter, чтобы остановить. ===\n", flush=True)
+    print(t("live.recording"), flush=True)
     session.start()
     try:
         input()
@@ -670,11 +671,8 @@ def after_meeting(args, wav_path: str, txt_path: str) -> int:
     """Console: offers the full processing of the recording, or a summary of the live text."""
     if not args.ask:
         return 0
-    choice = tool.ask("Что сделать с записью?",
-                      ["1 - обработать полностью: расшифровать заново целиком (лучше качество), по желанию\n"
-                       "      разделить по говорящим, проверить текст и сделать выжимку",
-                       "2 - сделать выжимку по тексту, который получился на лету"],
-                      "ничего, закончить", tool.number_in(1, 2))
+    choice = tool.ask(t("live.what_now"), [t("live.option_full"), t("live.option_summary")],
+                      t("live.nothing"), tool.number_in(1, 2))
     code = 0
     folder = os.path.dirname(wav_path)
     if choice == 1:
@@ -684,10 +682,10 @@ def after_meeting(args, wav_path: str, txt_path: str) -> int:
         code = tool.main(argv)
     elif choice == 2:
         code = tool.main([txt_path, "--ask"])
-    keep = tool.ask(f"Оставить звук встречи ({os.path.basename(wav_path)}, нужен для повторной обработки)?",
-                    ["1 - оставить", "2 - удалить"], "оставить", tool.number_in(1, 2))
+    keep = tool.ask(t("live.keep_sound", file=os.path.basename(wav_path)),
+                    [t("live.keep"), t("live.delete")], t("live.keep_default"), tool.number_in(1, 2))
     if keep == 2:
         os.remove(wav_path)
-        print("Звук удалён.", flush=True)
-    print(f"\nВсё лежит в {folder}", flush=True)
+        print(t("live.sound_deleted"), flush=True)
+    print(t("live.all_in", folder=folder), flush=True)
     return code
