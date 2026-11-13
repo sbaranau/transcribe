@@ -72,7 +72,7 @@ The results of a recording go into a folder next to it:
 | `<name>.checked.txt` | with names put in and speaker borders fixed by the AI |
 | `<name>.de.txt`, `<name>.de.checked.txt` | the translation, and its AI-corrected version |
 | `<name>.summary.md` | the summary: main ideas, decisions, tasks, every date mentioned, open questions |
-| `meeting.md`, `screenshots/` | with screenshots taken during the call: the transcript as Markdown with each screenshot at its moment |
+| `meeting.md`, `screenshots/` | with screenshots taken during the call: the transcript as Markdown with each screenshot at its moment; "Export to HTML" in the window makes `meeting.html` with the pictures inside, for any browser |
 
 From a terminal, `windows\transcribe.cmd` takes the same choices as options, for example:
 

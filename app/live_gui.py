@@ -670,8 +670,12 @@ class App:
                                         command=self.cancel_processing)
         self.folder_button = ttk.Button(buttons, text=t("win.open_folder"), command=self.open_folder)
         self.folder_button.pack(side="left", padx=(12, 0))
+        # The texts with screenshots (Markdown) as HTML with the pictures inside, for any browser.
+        self.export_button = ttk.Button(buttons, text=t("win.export_html"), command=self.export_html)
+        self.export_button.pack(side="left", padx=(6, 0))
         self.result_buttons = ttk.Frame(buttons)
         self.result_buttons.pack(side="left", padx=(18, 0))
+        self.refresh_export()
         self.refresh_after()
         threading.Thread(target=lambda: self.events.put(
             ("ai", ai_engines.verify_engines(ai_engines.find_engines()))), daemon=True).start()
@@ -814,6 +818,34 @@ class App:
                 widget.configure(state="normal")
             self.ai_choice.configure(state="readonly" if self.found_ai else "disabled")
             self.refresh_after()
+        self.refresh_export(locked)
+
+    def refresh_export(self, locked: bool = False) -> None:
+        folder = os.path.dirname(self.session.wav_path)
+        self.export_button.configure(state="normal" if screenshots.exportable(folder) and not locked else "disabled")
+
+    def export_html(self) -> None:
+        folder = os.path.dirname(self.session.wav_path)
+        self.export_button.configure(state="disabled")
+        self.status.configure(text=t("win.exporting"), foreground=GREY)
+
+        def work():
+            try:
+                self.events.put(("exported", screenshots.export_html(folder)))
+            except Exception as error:
+                self.events.put(("exported", error))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def show_exported(self, result) -> None:
+        self.refresh_export(bool(self.processing))
+        if isinstance(result, Exception):
+            self.status.configure(text=t("win.export_failed", error=result), foreground=RED)
+            return
+        self.status.configure(text=t("win.exported", files=", ".join(os.path.basename(p) for p in result)),
+                              foreground=GREEN)
+        if result:
+            tool.open_path(result[0])
 
     def cancel_processing(self) -> None:
         if not self.processing or self.processing.poll() is not None:
@@ -885,6 +917,8 @@ class App:
                     self.text.insert("end", data + "\n", ("info",))
                     self.text.configure(state="disabled")
                     self.text.see("end")
+                elif kind == "exported":
+                    self.show_exported(data)
                 elif kind == "translated":
                     self.add_translation(*data)
                 elif kind == "translation_info":

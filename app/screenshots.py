@@ -216,6 +216,116 @@ def write_markdown(txt_path: str, md_path: str | None = None) -> str | None:
     return md_path
 
 
+# --- HTML export ----------------------------------------------------------------------------
+
+# The transcripts with screenshots, the one to open first leading.
+EXPORT_ORDER = ["meeting.checked.md", "meeting.md", "meeting.live.md"]
+VOICE_COLOURS = ["#2e7d32", "#c2185b", "#ef6c00", "#6a1b9a", "#00838f", "#8d6e63"]
+YOU = {"You", "Вы", "Sie"}
+HTML_STYLE = """
+:root { --text: #1d1d1f; --muted: #6b6b6b; --back: #ffffff; --line: #e3e3e3; --you: #1565c0; }
+@media (prefers-color-scheme: dark) {
+  :root { --text: #e8e8e8; --muted: #9a9a9a; --back: #18191b; --line: #33353a; --you: #64a8ff; }
+}
+body { margin: 0; background: var(--back); color: var(--text);
+       font: 17px/1.55 "Segoe UI", system-ui, -apple-system, sans-serif; }
+main { max-width: 920px; margin: 0 auto; padding: 32px 20px 64px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+.source { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+p { margin: 0 0 16px; }
+.time { color: var(--muted); font-size: 14px; margin-right: 6px; }
+.label { font-weight: 600; }
+.note { color: var(--muted); font-style: italic; font-size: 14px; }
+figure { margin: 20px 0 26px; }
+figure img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; }
+figcaption { color: var(--muted); font-size: 14px; margin-top: 6px; }
+"""
+
+
+def label_colour(label: str) -> str:
+    if label in YOU:
+        return "var(--you)"
+    number = label.rsplit(" ", 1)[-1]
+    if number.isdigit():
+        return VOICE_COLOURS[(int(number) - 1) % len(VOICE_COLOURS)]
+    return VOICE_COLOURS[sum(map(ord, label)) % len(VOICE_COLOURS)]  # a name from the AI check
+
+
+def inline_html(text: str) -> str:
+    """Escapes text for HTML and keeps Markdown's backslash escapes as plain characters."""
+    import html
+    return html.escape(re.sub(r"\\([\\`*_{}\[\]()#+\-.!>|])", r"\1", text))
+
+
+def markdown_to_html(md_path: str, html_path: str | None = None) -> str:
+    """A transcript Markdown file (write_markdown's format, also after editing by hand) as one
+    HTML file with the screenshots embedded, readable in any browser and easy to send."""
+    import base64
+    import html
+    html_path = html_path or os.path.splitext(md_path)[0] + ".html"
+    folder = os.path.dirname(os.path.abspath(md_path))
+    blocks = [b.strip() for b in open(md_path, encoding="utf-8").read().split("\n\n") if b.strip()]
+    body = []
+    for block in blocks:
+        image = re.fullmatch(r"!\[([^\]]*)\]\(([^)]+)\)", block)
+        if image:
+            caption, target = image.groups()
+            path = os.path.join(folder, target.replace("/", os.sep))
+            if os.path.isfile(path):
+                data = base64.b64encode(open(path, "rb").read()).decode("ascii")
+                source = f"data:image/png;base64,{data}"
+            else:
+                source = html.escape(target)  # missing file: keep the link
+            body.append(f'<figure><img src="{source}" alt="{html.escape(caption)}" loading="lazy">'
+                        f"<figcaption>📷 {html.escape(caption)}</figcaption></figure>")
+            continue
+        note = re.fullmatch(r"_(.+)_", block, re.S)
+        if note:
+            body.append(f'<p class="note">{inline_html(note.group(1))}</p>')
+            continue
+        head = re.match(r"^\*\*\[(\d\d:\d\d:\d\d)\]\s*([^*]*?)\*\*\s*(.*)$", block, re.S)
+        if head:
+            time, label, text = head.groups()
+            label = label.strip().rstrip(":")
+            name = (f'<span class="label" style="color:{label_colour(label)}">{html.escape(label)}:</span> '
+                    if label else "")
+            body.append(f'<p><span class="time">[{time}]</span>{name}{inline_html(text)}</p>')
+        else:
+            body.append(f"<p>{inline_html(block)}</p>")
+    title = os.path.basename(folder)
+    page = (f'<!doctype html>\n<html lang="{ui_language()}">\n<head>\n<meta charset="utf-8">\n'
+            f'<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+            f"<title>{html.escape(title)}</title>\n<style>{HTML_STYLE}</style>\n</head>\n<body><main>\n"
+            f"<h1>{html.escape(title)}</h1>\n<div class=\"source\">{html.escape(os.path.basename(md_path))}</div>\n"
+            + "\n".join(body) + "\n</main></body>\n</html>\n")
+    with open(html_path + ".partial", "w", encoding="utf-8") as out:
+        out.write(page)
+    os.replace(html_path + ".partial", html_path)
+    return html_path
+
+
+def ui_language() -> str:
+    try:
+        import ui_text
+        return ui_text.language()
+    except Exception:
+        return "en"
+
+
+def exportable(folder: str) -> list[str]:
+    """The transcript Markdown files with screenshots in a folder, the one to open first leading:
+    checked, full, live, then their translations."""
+    names = list(EXPORT_ORDER)
+    for code in ("en", "de", "ru"):
+        names += [f"meeting.{code}.checked.md", f"meeting.{code}.md", f"meeting.live.{code}.md"]
+    return [os.path.join(folder, n) for n in names if os.path.isfile(os.path.join(folder, n))]
+
+
+def export_html(folder: str) -> list[str]:
+    """Every transcript Markdown file of the folder as HTML; returns the HTML paths."""
+    return [markdown_to_html(path) for path in exportable(folder)]
+
+
 def write_markdown_for(txt_paths: list[str], report=print) -> list[str]:
     """Markdown for every transcript file given that exists, when its folder has screenshots."""
     written = []

@@ -221,6 +221,12 @@ In the live window, "Screenshots of" picks a screen (or all screens) before the 
   `meeting.live.<lang>.md` for a live translation), and after the full processing
   `meeting.md`, `meeting.checked.md`, `meeting.<lang>.md`, `meeting.<lang>.checked.md`, with the
   paragraphs of the new transcript.
+- "Export to HTML" (`markdown_to_html`, `export_html`) turns every transcript Markdown file of
+  the folder (`meeting.checked.md`, `meeting.md`, `meeting.live.md` and their translations) into
+  a self-contained `.html` beside it and opens the first: the screenshots embedded as `data:`
+  URIs, labels in the window's colours, light and dark theme. It reads the Markdown, not the
+  transcript, so hand edits of the `.md` are kept; only the tool's own Markdown is understood
+  (paragraph heads, pictures, notes), anything else becomes plain paragraphs.
 - Screenshots are never sent to an AI. Windows only for now.
 
 Tested in the window with a synthetic capture (window withdrawn for each capture, marks after the
