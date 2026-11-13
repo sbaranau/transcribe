@@ -134,14 +134,14 @@ class App:
 
         # Translation while it happens: none, or into one of the interface languages.
         self.targets = [(None, t("win.translate_none"))] + ui_text.meeting_languages()[:3]
-        ttk.Label(frame, text=t("win.translate_to")).grid(row=1, column=0, sticky="w", pady=3)
+        ttk.Label(frame, text=t("win.translate_to")).grid(row=1, column=0, sticky="nw", pady=(6, 3))
         line = ttk.Frame(frame)
         line.grid(row=1, column=1, sticky="w", pady=3)
         self.translate_to = ttk.Combobox(line, state="readonly", values=[name for _, name in self.targets], width=34)
         wanted = remembered.get("translate") or None
         self.translate_to.current(next((i for i, (code, _) in enumerate(self.targets) if code == wanted), 0))
-        self.translate_to.pack(side="left")
-        ttk.Label(line, text=t("win.translate_note"), style="Note.TLabel", wraplength=380).pack(side="left", padx=8)
+        self.translate_to.pack(anchor="w")
+        ttk.Label(line, text=t("win.translate_note"), style="Note.TLabel", wraplength=520).pack(anchor="w", pady=(2, 0))
 
         microphones, default_microphone, speakers = live.list_devices()
         self.microphones = {m.name: m for m in microphones}

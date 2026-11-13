@@ -147,7 +147,9 @@ class MarianOnnx:
         if not finished:
             finished = [(scores[0], sequences[0][1:])]
         tokens = max(finished, key=lambda f: f[0])[1]
-        return self.tokenizer.decode(tokens, skip_special_tokens=True).strip()
+        text = self.tokenizer.decode(tokens, skip_special_tokens=True).strip()
+        # A German date ends in a period ("den 15."), and so does the sentence: "15.." -> "15.".
+        return re.sub(r"(?<!\.)\.\.(?!\.)", ".", text)
 
 
 def loadable_tokenizer(path: str) -> dict:
