@@ -61,6 +61,15 @@ TEXTS = {
         "говорящими фразы. Исходный текст сохранится, исправленный будет в <имя>.checked.txt."),
     "ask.summary": ("Make a summary with an AI?", "Eine Zusammenfassung mit einer KI erstellen?",
                     "Сделать выжимку с помощью ИИ?"),
+    "ask.translate": ("Translate the text into another language? Locally, nothing leaves the computer.",
+                      "Den Text in eine andere Sprache übersetzen? Lokal, nichts verlässt den Computer.",
+                      "Перевести текст на другой язык? Локально, текст никуда не уходит."),
+    "ask.check_translation": ("Check the translation with an AI? It corrects clear mistakes of meaning,\n"
+                              "numbers and names; the machine translation is kept next to it.",
+                              "Die Übersetzung mit einer KI prüfen? Sie korrigiert klare Fehler bei Sinn,\n"
+                              "Zahlen und Namen; die maschinelle Übersetzung bleibt daneben erhalten.",
+                              "Проверить перевод с помощью ИИ? Он исправит явные ошибки в смысле, числах\n"
+                              "и именах; машинный перевод сохранится рядом."),
     "ask.ai_rules": (
         "\nFor the check and the summary the transcript goes to the chosen AI under your account\n"
         "(a local model keeps it on the computer), so only if the rules you work under allow it.",
@@ -159,6 +168,22 @@ TEXTS = {
     "win.all_devices": ("All devices are checked, so the other side is heard wherever the call's sound goes.",
                         "Alle Geräte sind ausgewählt, damit die anderen zu hören sind, egal wohin der Ton des Anrufs geht.",
                         "Отмечены все устройства: так собеседники будут слышны, куда бы ни шёл звук созвона."),
+    "win.translate_to": ("Translate into:", "Übersetzen in:", "Переводить на:"),
+    "win.translate_none": ("No translation", "Keine Übersetzung", "Без перевода"),
+    "win.translate_note": ("Locally, nothing leaves the computer. The first time, the model for the "
+                           "language pair is downloaded.",
+                           "Lokal, nichts verlässt den Computer. Beim ersten Mal wird das Modell für "
+                           "das Sprachpaar heruntergeladen.",
+                           "Локально, текст никуда не уходит. В первый раз скачивается модель для "
+                           "этой пары языков."),
+    "win.translation_head": ("Translation ({language})", "Übersetzung ({language})", "Перевод ({language})"),
+    "win.after_translate": ("Translate the text into:", "Den Text übersetzen in:", "Перевести текст на:"),
+    "win.translate_local": ("(locally)", "(lokal)", "(локально)"),
+    "win.check_translation": ("Check the translation with an AI: meaning, numbers, names",
+                              "Übersetzung mit einer KI prüfen: Sinn, Zahlen, Namen",
+                              "Проверить перевод с помощью ИИ: смысл, числа, имена"),
+    "win.translation": ("translation", "Übersetzung", "Перевод"),
+    "win.checked_translation": ("checked translation", "geprüfte Übersetzung", "Проверенный перевод"),
     "win.folder": ("Folder:", "Ordner:", "Папка:"),
     "win.date_time": ("<date time>", "<Datum Uhrzeit>", "<дата время>"),
     "win.tell_people": ("Tell the participants that the meeting is transcribed.",

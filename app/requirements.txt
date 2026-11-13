@@ -12,3 +12,7 @@ sherpa-onnx-core==2.0.1
 soundcard==0.4.6
 cffi==2.1.1
 pycparser==3.12
+# Translation (translator.py): Opus-MT in ONNX; both were already installed as dependencies of
+# faster-whisper and sherpa-onnx, pinned here since the translation uses them directly. MIT / Apache-2.0.
+onnxruntime==1.31.1
+tokenizers==0.23.3

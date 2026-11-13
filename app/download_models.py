@@ -4,6 +4,8 @@
 - Voice separation (speaker diarization) for sherpa-onnx, about 45 MB, from the sherpa-onnx
   releases on GitHub: pyannote segmentation 3.0 and the NVIDIA NeMo TitaNet-small voice
   embedding model.
+- With --translation: the Opus-MT translation models (translator.py), otherwise downloaded on
+  first use.
 """
 import os
 import sys
@@ -58,7 +60,21 @@ def diarization() -> None:
         download(EMBEDDING_URL, EMBEDDING_MODEL)
 
 
+def translation() -> None:
+    """All translation models (translator.py), for a computer that is offline in meetings;
+    otherwise each one is downloaded the first time its language pair is used."""
+    import translator
+    for direction in translator.MODELS:
+        if translator.is_downloaded(direction):
+            print(f"Translation model {'-'.join(direction)} already present.")
+        else:
+            translator.download(direction, report=lambda line: print(line, flush=True))
+
+
 if __name__ == "__main__":
+    if sys.argv[1:] == ["--translation"]:
+        translation()
+        sys.exit(0)
     whisper()
     diarization()
     sys.exit(0 if os.path.isfile(SEGMENTATION_MODEL) and os.path.isfile(EMBEDDING_MODEL) else 1)

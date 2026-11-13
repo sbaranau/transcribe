@@ -96,7 +96,7 @@ To, "Расшифровать", with the same icon). `windows\setup.cmd` asks wh
 the user's SendTo folder is touched.
 
 From a terminal, for options the questions do not cover or for many files without questions
-(`linux/transcribe.sh` takes the same options):
+(`linux/transcribe.sh` takes the same options; the translation is not yet tested on Linux):
 
 ```
 C:\bin\transcribe\windows\transcribe.cmd "meeting.mp4" --language ru
@@ -108,9 +108,10 @@ C:\bin\transcribe\windows\transcribe.cmd --help
 
 Options: `--language ru|de|en|...|multi` (default: detected from the first 30 seconds; `multi`
 detects the language for every 30-second window), `--speakers [N]` (label speakers; N if the
-number is known), `--ask`, `--check`, `--summary`, `--ai claude|codex|local` (default: the
-first one found), `--srt`, `--terms FILE`, `--no-terms`, `--no-filter`, `--out-dir DIR`, `--cpu`,
-`--model`, `--force`.
+number is known), `--ask`, `--check`, `--summary`, `--translate en|de|ru`,
+`--check-translation`, `--ai claude|codex|local` (default: the first one found), `--srt`,
+`--terms FILE`, `--no-terms`, `--no-filter`, `--out-dir DIR`, `--cpu`, `--model`,
+`--ui-language en|de|ru`, `--force`.
 
 ## Live mode
 
@@ -196,6 +197,48 @@ Tested by driving the window with speech played through the speakers, and on a r
 author. Not yet tested: a long meeting, a computer without an NVIDIA GPU. Speakers are separated
 only in the full processing afterwards; participants should be told that the meeting is
 transcribed.
+
+## Translation
+
+`--translate en|de|ru` (a question with `--ask`, a check box in the live window's after panel)
+writes `<name>.<lang>.txt`; in the live window, "Translate into" adds a second column with the
+translation and `meeting.live.<lang>.txt`. `app\translator.py`:
+
+- Models: [Opus-MT](https://github.com/Helsinki-NLP/Opus-MT) of the University of Helsinki
+  (Marian transformer-base, about 75 M parameters; CC-BY 4.0 for ru-en and en-de, Apache-2.0 for
+  en-ru and de-en), in the ONNX export of the `Xenova/opus-mt-*` repositories, pinned to a
+  revision, full precision (about 440 MB per direction), downloaded on first use into
+  `app\models\translation\` (`download_models.py --translation` fetches all four). There is no
+  base model for German<->Russian, so it goes through English; the large `opus-mt-tc-big-de-zle`
+  has no ready ONNX export and would need PyTorch to convert.
+- Runtime: ONNX Runtime (CPU) and `tokenizers`, both already installed with faster-whisper; no new
+  package. The decoding (encoder, merged decoder with cache, beam search with 4 beams, the pad
+  token suppressed, length-normalized scores) is in `MarianOnnx`. The exports' `tokenizer.json`
+  has a `Precompiled` normalizer without a character map, which `tokenizers` refuses; it is
+  dropped on load and the text NFKC-normalized instead.
+- Text: split into sentences, each translated on its own; the `[hh:mm:ss] Label:` prefix stays,
+  the tool's labels are translated ("Говорящий 2" -> "Speaker 2"), names stay. The source
+  language is the meeting's if given, else told from letters and common words (`detect`); in the
+  live mode per phrase, short ones taking the language of the phrase before.
+- Measured on meeting-style sentences (16 CPU threads, otherwise idle): 0.25 s per sentence with
+  greedy decoding, 0.35 s with 4 beams after removing per-step copies (0.72 s before); about 15
+  minutes for a 3-hour meeting, twice that through English. The 8-bit export
+  (`*_quantized.onnx`, a quarter of the size) was not faster and made more errors ("Anna is
+  preparing the release of the first release of the year" for "Anna bereitet die Release Notes
+  bis Mittwoch vor"), so it is not used. Typical errors of the full model: terms ("Release" ->
+  "освобождение"), "Линукс" -> "Linucs", dates with prepositions ("до двенадцатого" ->
+  "before 12:00").
+
+`--check-translation` (`app\translation_checker.py`, `app\translation_check_prompt.md`): the AI
+gets every paragraph as `ORIGINAL:` / `TRANSLATION:` and returns fixes, each the paragraph number,
+words copied from the translation and the words to put instead. A fix is applied only if its words
+are found in that paragraph's translation (any whitespace) and the replacement is at most three
+times as long plus 80 characters; the prefix with time and label cannot be changed. The result is
+`<name>.<lang>.checked.txt` with a first line counting the fixes; the machine translation stays.
+Tested with Claude on a synthetic 10-paragraph Russian meeting translated into English: all 8
+errors fixed (meaning, dates, "Linucs", "base migration" -> "database migration"), nothing else
+touched, no suggestion skipped. The order of the steps is check, translation (from the checked
+text), translation check, summary.
 
 ## Summary AI
 
@@ -314,6 +357,8 @@ For a `.txt` input, the summary is written next to that `.txt`.
   from the recording's folder, so load them by hand (VLC: Subtitle > Add Subtitle File), or move
   the `.srt` next to the recording.
 - `<name>.checked.txt` (with `--check`): the transcript with names and corrected speaker labels.
+- `<name>.<lang>.txt` (with `--translate`): the local translation, same paragraphs and timestamps;
+  `<name>.<lang>.checked.txt` with `--check-translation`.
 - `<name>.summary.md` (made from the checked text if there is one): In short, Main ideas (every idea, proposal, argument and number, grouped
   by topic), Decisions, Tasks (what, who, due, timestamp), Dates and deadlines (every date
   reference, relative ones kept as said), Open questions, Topics by time. Every bullet has a
@@ -381,6 +426,8 @@ The top level holds only the shortcuts and the guides; the scripts are in `windo
 | `app\download_models.py` | model download |
 | `app\shortcuts.py` | Windows shortcuts with icons: in the tool folder and in Send To |
 | `app\ui_text.py` | the interface texts in English, German and Russian, and how the language is chosen |
+| `app\translator.py` | local translation (Opus-MT in ONNX), also during the live mode |
+| `app\translation_checker.py`, `app\translation_check_prompt.md` | the AI check of a translation; the instructions it gets |
 | `app\icons\` | `transcribe`, `live`, `setup` as `.ico` (Windows) and `.png` (Linux, window icon); `make_icons.py` draws them |
 | `app\requirements.txt` | pinned packages (`av` must stay below 15 for faster-whisper 1.2.1) |
 | `app\ai.local.ini`, `app\ui.local.ini` | where the summary AI was found, if a path was entered; the interface language, the live window's last meeting language and microphone (not in git) |
@@ -388,3 +435,4 @@ The top level holds only the shortcuts and the guides; the scripts are in `windo
 | `app\venv\` | virtual environment with the packages and the NVIDIA CUDA libraries |
 | `app\models\large-v3-turbo\` | the Whisper model, so it works offline |
 | `app\models\diarization\` | the voice separation models |
+| `app\models\translation\` | the translation models, downloaded on first use |

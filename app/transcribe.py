@@ -11,6 +11,8 @@ For each audio/video input it writes, into a subfolder named <name> next to the 
     <name>.srt          subtitles timed by the spoken words (with --srt)
     <name>.summary.md   structured summary made by an AI (with --summary): Claude Code, ChatGPT
                         through the Codex CLI, or a local model server (see ai_engines.py)
+    <name>.<lang>.txt   local machine translation into en, de or ru (with --translate, see
+                        translator.py); <name>.<lang>.checked.txt with --check-translation
 
 Transcription runs locally (NVIDIA GPU when available, CPU otherwise); nothing leaves the
 machine. Only --summary sends the transcript to Claude, under your own account, so use it only
@@ -41,6 +43,8 @@ import numpy as np
 
 import ai_engines
 import checker
+import translation_checker
+import translator
 import ui_text
 from ui_text import t
 
@@ -842,10 +846,19 @@ def ask_options(args, has_media: bool) -> None:
     if not args.summary:
         choice = ask(t("ask.summary"), yes_no(), t("no"), number_in(1, 2))
         args.summary = choice == 1
-    if args.check or args.summary:
+    if not args.translate:
+        source = args.language if args.language in translator.LANGUAGES else None
+        targets = [code for code in ui_text.meeting_languages()[:3] if code[0] != source]
+        choice = ask(t("ask.translate"), [f"{n} - {name}" for n, (_, name) in enumerate(targets, start=1)],
+                     t("no"), number_in(1, len(targets)))
+        args.translate = targets[choice - 1][0] if choice else None
+    if args.translate and not args.check_translation:
+        choice = ask(t("ask.check_translation"), yes_no(), t("no"), number_in(1, 2))
+        args.check_translation = choice == 1
+    if args.check or args.summary or args.check_translation:
         print(t("ask.ai_rules"))
         if not choose_ai(args, interactive=True):
-            args.check = args.summary = False
+            args.check = args.summary = args.check_translation = False
     print()
 
 
@@ -861,10 +874,44 @@ def after_transcript(txt_path: str, args) -> bool:
         except Exception as error:  # the AI failed or returned something unusable
             print(f"Check FAILED: {error}", file=sys.stderr, flush=True)
             ok = False
+    base = txt_path[:-len(".checked.txt")] if txt_path.endswith(".checked.txt") else os.path.splitext(txt_path)[0]
+    if args.translate:
+        ok = translate(source, base, args) and ok
     if args.summary:
-        base = txt_path[:-len(".checked.txt")] if txt_path.endswith(".checked.txt") else os.path.splitext(txt_path)[0]
         ok = summarize(source, args, base + ".summary.md") and ok
     return ok
+
+
+def translate(source: str, base: str, args) -> bool:
+    """<base>.<lang>.txt, made locally from the (checked) transcript; then, if asked, its AI
+    check into <base>.<lang>.checked.txt."""
+    target = args.translate
+    out_path = f"{base}.{target}.txt"
+    try:
+        if os.path.exists(out_path) and not args.force:
+            print(f"Translation exists, kept: {out_path} (--force redoes it)", flush=True)
+        else:
+            language = args.language if args.language in translator.LANGUAGES else None
+            text = open(source, encoding="utf-8").read()
+            language = language or translator.detect(text[:20000])
+            if language not in translator.LANGUAGES:
+                print("Translation skipped: the transcript is not in English, German or Russian.", flush=True)
+                return True
+            if language == target:
+                print(f"Translation skipped: the transcript is already in {target}.", flush=True)
+                return True
+            print(f"Translating {language} -> {target} locally (Opus-MT)...", flush=True)
+            started = time.time()
+            translator.translate_file(source, target, out_path, language,
+                                      report=lambda line: print(line, flush=True))
+            print(f"Translation done in {format_clock(time.time() - started)}: {out_path}", flush=True)
+        if args.check_translation:
+            translation_checker.check_file(source, out_path, args.ai_engine, args.ai_location, args.force,
+                                           report=lambda line: print(line, flush=True))
+        return True
+    except Exception as error:
+        print(f"Translation FAILED: {error}", file=sys.stderr, flush=True)
+        return False
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -898,6 +945,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ai", choices=ai_engines.ENGINES, default=None,
                         help="AI for the check and the summary: claude (Claude Code), codex (ChatGPT "
                              "via Codex CLI) or local (Ollama, LM Studio, ...); default: the first installed")
+    parser.add_argument("--translate", choices=list(translator.LANGUAGES), default=None,
+                        help="also translate the transcript locally into en, de or ru (Opus-MT, "
+                             "nothing leaves the computer): <name>.<lang>.txt")
+    parser.add_argument("--check-translation", action="store_true",
+                        help="with --translate: have an AI correct clear mistakes of the translation, "
+                             "into <name>.<lang>.checked.txt (sends original and translation to it, "
+                             "unless it is a local model)")
     parser.add_argument("--srt", action="store_true", help="also write .srt subtitles with exact timings")
     parser.add_argument("--out-dir", default=None, help="output folder (default: a subfolder named after each input, next to it)")
     parser.add_argument("--model", default=DEFAULT_MODEL,
@@ -945,17 +999,21 @@ def main(argv: list[str] | None = None) -> int:
     args.labelled_input = any(checker.has_labels(open(p, encoding="utf-8").read()) for p in transcripts)
     if args.ask:
         ask_options(args, bool(media))
-    elif args.check or args.summary:
+    elif args.check or args.summary or args.check_translation:
         if not choose_ai(args, interactive=False):
-            args.check = args.summary = False
-            if transcripts:
+            args.check = args.summary = args.check_translation = False
+            if transcripts and not args.translate:
                 return 1
     if args.speakers is not None and media and not (
             os.path.isfile(SEGMENTATION_MODEL) and os.path.isfile(EMBEDDING_MODEL)):
         print(f"The voice separation models are missing. Run {SETUP_HINT}.", file=sys.stderr)
         return 3
-    if transcripts and not (args.summary or args.check):
-        print("A .txt input is only checked or summarized; add --check or --summary.", file=sys.stderr)
+    if args.check_translation and not args.translate:
+        print("--check-translation needs --translate.", file=sys.stderr)
+        return 2
+    if transcripts and not (args.summary or args.check or args.translate):
+        print("A .txt input is only checked, translated or summarized; add --check, --translate or "
+              "--summary.", file=sys.stderr)
         return 2
 
     # Recordings already transcribed are not done again, so a corrected .txt is never lost;
@@ -970,7 +1028,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.srt and not os.path.isfile(output_base(path, args.out_dir) + ".srt"):
             print("  No .srt for it: subtitles are made only together with the transcript; "
                   "use --force to make both.", flush=True)
-        if args.summary or args.check:
+        if args.summary or args.check or args.translate:
             transcripts.append(txt_path)
 
     failures = 0

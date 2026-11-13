@@ -4,6 +4,7 @@
    model loads meanwhile. Changing the interface language rebuilds the window, keeping the model.
 2. During: recording light and timer, sound levels of the microphone and the computer, the text
    with timestamps (auto-scrolling unless you scrolled up), the unfinished phrase as a grey draft;
+   with a translation chosen, the translation in a second column (translator.LiveTranslator);
    Stop, open folder, copy text, text size.
 3. After: the full processing as check boxes (transcribe again, speakers, check, summary, which
    AI, delete the sound), its progress, and buttons to open the results. The processing runs as
@@ -28,6 +29,7 @@ from tkinter import font as tkfont, messagebox, ttk
 import ai_engines
 import live
 import transcribe as tool
+import translator
 import ui_text
 from ui_text import t
 
@@ -54,6 +56,8 @@ class App:
         self.root, self.args = root, args
         self.restart = None  # set to (model, hotwords) when the interface language changes
         self.processing = None  # the child process of the full processing while it runs
+        self.live_translator = None
+        self.translation_text = None
         self.cancelled = False
         self.events = queue.Queue()
         self.model = self.hotwords = self.session = None
@@ -121,12 +125,23 @@ class App:
 
         remembered = self.load_ui_settings()
         self.languages = [(None, t("meeting.auto"))] + ui_text.meeting_languages()
-        ttk.Label(frame, text=t("win.language")).grid(row=1, column=0, sticky="w", pady=3)
+        ttk.Label(frame, text=t("win.language")).grid(row=0, column=0, sticky="w", pady=3)
         self.language = ttk.Combobox(frame, state="readonly", values=[name for _, name in self.languages], width=34)
         wanted = self.args.language or remembered.get("language") or None
         default = next((i for i, (code, _) in enumerate(self.languages) if code == wanted), 0)
         self.language.current(default)
-        self.language.grid(row=1, column=1, sticky="w", pady=3)
+        self.language.grid(row=0, column=1, sticky="w", pady=3)
+
+        # Translation while it happens: none, or into one of the interface languages.
+        self.targets = [(None, t("win.translate_none"))] + ui_text.meeting_languages()[:3]
+        ttk.Label(frame, text=t("win.translate_to")).grid(row=1, column=0, sticky="w", pady=3)
+        line = ttk.Frame(frame)
+        line.grid(row=1, column=1, sticky="w", pady=3)
+        self.translate_to = ttk.Combobox(line, state="readonly", values=[name for _, name in self.targets], width=34)
+        wanted = remembered.get("translate") or None
+        self.translate_to.current(next((i for i, (code, _) in enumerate(self.targets) if code == wanted), 0))
+        self.translate_to.pack(side="left")
+        ttk.Label(line, text=t("win.translate_note"), style="Note.TLabel", wraplength=380).pack(side="left", padx=8)
 
         microphones, default_microphone, speakers = live.list_devices()
         self.microphones = {m.name: m for m in microphones}
@@ -186,7 +201,8 @@ class App:
     def chosen_settings(self) -> dict:
         microphone = self.microphone.get()
         return {"language": self.languages[self.language.current()][0] or "",
-                "microphone": microphone if microphone in self.microphones else NO_MICROPHONE}
+                "microphone": microphone if microphone in self.microphones else NO_MICROPHONE,
+                "translate": self.targets[self.translate_to.current()][0] or ""}
 
     def change_interface(self, _event=None) -> None:
         code = list(ui_text.LANGUAGES)[self.interface.current()]
@@ -219,17 +235,34 @@ class App:
 
     def build_text(self) -> ttk.Frame:
         frame = ttk.Frame(self.root)
-        self.text = tk.Text(frame, wrap="word", font=(FONT, self.text_size), padx=12, pady=10,
-                            relief="flat", background="#fbfbfb", spacing3=4, height=8)
-        scroll = ttk.Scrollbar(frame, command=self.text.yview)
-        self.text.configure(yscrollcommand=scroll.set)
-        self.text.pack(side="left", fill="both", expand=True)
-        scroll.pack(side="right", fill="y")
+        self.panes = ttk.PanedWindow(frame, orient="horizontal")
+        self.panes.pack(fill="both", expand=True)
+        left, self.text = self.text_column(self.panes)
+        self.panes.add(left, weight=1)
         self.apply_text_size()
         self.text.insert("end", t("win.text_hint"), ("hint",))
         self.text.configure(state="disabled")
-        self.to_end = ttk.Button(frame, text=t("win.to_end"), command=self.scroll_to_end)
+        self.to_end = ttk.Button(left, text=t("win.to_end"), command=self.scroll_to_end)
         return frame
+
+    @staticmethod
+    def text_column(parent, title: str | None = None) -> tuple[ttk.Frame, tk.Text]:
+        column = ttk.Frame(parent)
+        if title:
+            ttk.Label(column, text=title, style="Note.TLabel").pack(anchor="w", padx=4, pady=(0, 2))
+        text = tk.Text(column, wrap="word", font=(FONT, 13), padx=12, pady=10, relief="flat",
+                       background="#fbfbfb", spacing3=4, height=8)
+        scroll = ttk.Scrollbar(column, command=text.yview)
+        text.configure(yscrollcommand=scroll.set)
+        scroll.pack(side="right", fill="y")
+        text.pack(side="left", fill="both", expand=True)
+        return column, text
+
+    def add_translation_column(self, name: str) -> None:
+        right, self.translation_text = self.text_column(self.panes, t("win.translation_head", language=name))
+        self.translation_text.configure(background="#f6f8fb", state="disabled")
+        self.panes.add(right, weight=1)
+        self.apply_text_size()
 
     def build_controls(self) -> ttk.Frame:
         frame = ttk.Frame(self.root)
@@ -242,15 +275,18 @@ class App:
         return frame
 
     def apply_text_size(self) -> None:
-        self.text.configure(font=(FONT, self.text_size))
-        self.text.tag_configure("time", foreground=GREY, font=(FONT, max(8, self.text_size - 3)))
-        self.text.tag_configure("draft", foreground="#9a9a9a", font=(FONT, self.text_size, "italic"))
-        self.text.tag_configure("hint", foreground=GREY)
-        self.text.tag_configure("info", foreground=GREY, font=(FONT, max(8, self.text_size - 3), "italic"))
-        self.text.tag_configure("me", foreground="#1565c0", font=(FONT, self.text_size, "bold"))
-        self.text.tag_configure("others", foreground="#2e7d32", font=(FONT, self.text_size, "bold"))
-        for number, colour in enumerate(VOICE_COLOURS):
-            self.text.tag_configure(f"voice{number}", foreground=colour, font=(FONT, self.text_size, "bold"))
+        for text in (self.text, self.translation_text):
+            if text is None:
+                continue
+            text.configure(font=(FONT, self.text_size))
+            text.tag_configure("time", foreground=GREY, font=(FONT, max(8, self.text_size - 3)))
+            text.tag_configure("draft", foreground="#9a9a9a", font=(FONT, self.text_size, "italic"))
+            text.tag_configure("hint", foreground=GREY)
+            text.tag_configure("info", foreground=GREY, font=(FONT, max(8, self.text_size - 3), "italic"))
+            text.tag_configure("me", foreground="#1565c0", font=(FONT, self.text_size, "bold"))
+            text.tag_configure("others", foreground="#2e7d32", font=(FONT, self.text_size, "bold"))
+            for number, colour in enumerate(VOICE_COLOURS):
+                text.tag_configure(f"voice{number}", foreground=colour, font=(FONT, self.text_size, "bold"))
 
     def change_size(self, step: int) -> None:
         self.text_size = min(28, max(9, self.text_size + step))
@@ -305,6 +341,14 @@ class App:
         self.text.configure(state="disabled")
         self.status.configure(text=t("win.recording"), foreground=RED)
         self.folder = folder
+        target, name = self.targets[self.translate_to.current()]
+        if target:
+            self.add_translation_column(name)
+            self.live_translator = translator.LiveTranslator(
+                target, language, os.path.join(folder, f"meeting.live.{target}.txt"),
+                on_result=lambda *result: self.events.put(("translated", result)),
+                on_info=lambda message: self.events.put(("translation_info", message)))
+            self.live_translator.start()
 
     def set_levels(self, microphone: float, computer: float) -> None:
         self.levels = (max(microphone, self.levels[0] * 0.6), max(computer, self.levels[1] * 0.6))
@@ -318,6 +362,8 @@ class App:
 
     def finish_session(self) -> None:
         self.session.stop()
+        if self.live_translator:
+            self.live_translator.finish()  # translates what is still waiting
         self.events.put(("stopped", None))
         self.session.stopping.set()
 
@@ -346,6 +392,8 @@ class App:
         new_paragraph = (self.last_end is None or label != self.last_label
                          or start - self.last_end >= PARAGRAPH_PAUSE
                          or start - self.paragraph_start >= PARAGRAPH_LONGEST)
+        if self.live_translator:
+            self.live_translator.add(start, label, text, new_paragraph, self.label_tag(label) if label else None)
         if new_paragraph:
             gap = "\n\n" if self.last_end is not None else ""
             name = (f"{label}: ", (self.label_tag(label),)) if label else ("", ())
@@ -355,6 +403,30 @@ class App:
             self.append_final(" " + text, ())
         self.last_end, self.last_label = end, label
         self.render_drafts()
+
+    def add_translation(self, start: float, label: str | None, text: str, new_paragraph: bool, tag) -> None:
+        """A translated phrase in the second column, in the paragraphs of the original."""
+        widget = self.translation_text
+        follow = widget.yview()[1] >= 0.999
+        widget.configure(state="normal")
+        if new_paragraph:
+            gap = "\n\n" if widget.index("end-1c") != "1.0" else ""
+            name = (f"{label}: ", (tag or "others",)) if label else ("", ())
+            widget.insert("end-1c", gap, (), f"[{tool.format_clock(start)}]  ", ("time",), *name, text, ())
+        else:
+            widget.insert("end-1c", " " + text)
+        widget.configure(state="disabled")
+        if follow:
+            widget.see("end")
+
+    def add_translation_info(self, message: str) -> None:
+        widget = self.translation_text
+        if widget is None:
+            return
+        widget.configure(state="normal")
+        widget.insert("end-1c", ("\n" if widget.index("end-1c") != "1.0" else "") + f"({message})\n", ("info",))
+        widget.configure(state="disabled")
+        widget.see("end")
 
     def label_tag(self, label: str) -> str:
         """Blue for you; a colour of its own for every voice of the other side ("Собеседник 2")."""
@@ -457,17 +529,35 @@ class App:
         self.check_box = ttk.Checkbutton(frame, text=t("win.check"),
                                          variable=self.check, command=self.refresh_after)
         self.check_box.grid(row=3, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=2)
+        live_target = self.live_translator.target if self.live_translator else None
+        self.translate = tk.BooleanVar(value=bool(live_target))
+        self.check_translation = tk.BooleanVar(value=False)
+        line = ttk.Frame(frame)
+        line.grid(row=4, column=0, columnspan=3, sticky="w", pady=2)
+        self.translate_box = ttk.Checkbutton(line, text=t("win.after_translate"), variable=self.translate,
+                                             command=self.refresh_after)
+        self.translate_box.pack(side="left")
+        self.after_targets = ui_text.meeting_languages()[:3]
+        self.after_target = ttk.Combobox(line, state="readonly", width=16,
+                                         values=[name for _, name in self.after_targets])
+        self.after_target.current(next((i for i, (code, _) in enumerate(self.after_targets)
+                                        if code == live_target), 0))
+        self.after_target.pack(side="left", padx=6)
+        ttk.Label(line, text=t("win.translate_local"), style="Note.TLabel").pack(side="left", padx=4)
+        self.check_translation_box = ttk.Checkbutton(frame, text=t("win.check_translation"),
+                                                     variable=self.check_translation, command=self.refresh_after)
+        self.check_translation_box.grid(row=5, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=2)
         self.summary_box = ttk.Checkbutton(frame, text=t("win.summary"), variable=self.summary,
                                            command=self.refresh_after)
-        self.summary_box.grid(row=4, column=0, columnspan=3, sticky="w", pady=2)
+        self.summary_box.grid(row=6, column=0, columnspan=3, sticky="w", pady=2)
 
         self.ai_row = ttk.Frame(frame)
-        self.ai_row.grid(row=5, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=(4, 2))
+        self.ai_row.grid(row=7, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=(4, 2))
         ttk.Label(self.ai_row, text=t("win.ai")).pack(side="left")
         self.ai_choice = ttk.Combobox(self.ai_row, state="disabled", width=52)
         self.ai_choice.pack(side="left", padx=6)
         self.ai_note = ttk.Label(frame, text=t("win.searching"), style="Note.TLabel", wraplength=760)
-        self.ai_note.grid(row=6, column=0, columnspan=3, sticky="w", padx=(22, 0))
+        self.ai_note.grid(row=8, column=0, columnspan=3, sticky="w", padx=(22, 0))
         self.path_row = ttk.Frame(frame)
         ttk.Label(self.path_row, text=t("win.path"), wraplength=740).pack(anchor="w")
         entry_line = ttk.Frame(self.path_row)
@@ -477,12 +567,12 @@ class App:
         self.try_button = ttk.Button(entry_line, text=t("win.try_path"), command=self.try_path)
         self.try_button.pack(side="left", padx=6)
         self.ai_warning = ttk.Label(frame, foreground=RED, wraplength=760, text=t("win.ai_rules"))
-        self.ai_warning.grid(row=8, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=(2, 4))
+        self.ai_warning.grid(row=10, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=(2, 4))
 
         self.delete_box = ttk.Checkbutton(frame, text=t("win.delete_sound"), variable=self.delete_sound)
-        self.delete_box.grid(row=9, column=0, columnspan=3, sticky="w", pady=2)
+        self.delete_box.grid(row=11, column=0, columnspan=3, sticky="w", pady=2)
         buttons = ttk.Frame(frame)
-        buttons.grid(row=10, column=0, columnspan=3, sticky="w", pady=(10, 0))
+        buttons.grid(row=12, column=0, columnspan=3, sticky="w", pady=(10, 0))
         self.run_button = ttk.Button(buttons, text=t("win.run"), style="Big.TButton", command=self.run_processing)
         self.run_button.pack(side="left")
         # Takes the place of Run while the processing runs.
@@ -506,14 +596,19 @@ class App:
         if not can_check:
             self.check.set(False)
         self.check_box.configure(state="normal" if can_check else "disabled")
-        needs_ai = self.check.get() or self.summary.get()
+        translate = self.translate.get()
+        self.after_target.configure(state="readonly" if translate else "disabled")
+        if not translate:
+            self.check_translation.set(False)
+        self.check_translation_box.configure(state="normal" if translate else "disabled")
+        needs_ai = self.check.get() or self.summary.get() or self.check_translation.get()
         for widget in (self.ai_row, self.ai_note, self.ai_warning):
             if needs_ai and (widget is not self.ai_note or widget.cget("text")):
                 widget.grid()
             else:
                 widget.grid_remove()
         if needs_ai and not self.found_ai and self.ai_note.cget("text") != t("win.searching"):
-            self.path_row.grid(row=7, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=2)
+            self.path_row.grid(row=9, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=2)
         else:
             self.path_row.grid_remove()
 
@@ -546,10 +641,10 @@ class App:
         self.show_ai(usable, {})
 
     def run_processing(self) -> None:
-        if not (self.redo.get() or self.summary.get()):
+        if not (self.redo.get() or self.summary.get() or self.translate.get()):
             messagebox.showinfo(t("win.nothing_to_do_title"), t("win.nothing_to_do"))
             return
-        if (self.check.get() or self.summary.get()) and not self.found_ai:
+        if (self.check.get() or self.summary.get() or self.check_translation.get()) and not self.found_ai:
             if self.ai_note.cget("text") == t("win.searching"):
                 messagebox.showinfo(t("win.wait_title"), t("win.wait"))
             else:
@@ -570,6 +665,10 @@ class App:
             argv = [self.session.txt_path, "--force"]
         if self.summary.get():
             argv.append("--summary")
+        if self.translate.get():
+            argv += ["--translate", self.after_targets[self.after_target.current()][0]]
+            if self.check_translation.get():
+                argv.append("--check-translation")
         if ai:
             argv += ["--ai", ai]
         self.cancelled = False
@@ -611,6 +710,7 @@ class App:
         """While the processing runs, its settings cannot be changed and Run becomes Stop."""
         if locked:
             for widget in (self.redo_box, self.split_box, self.count_box, self.check_box, self.summary_box,
+                           self.translate_box, self.after_target, self.check_translation_box,
                            self.ai_choice, self.path_entry, self.try_button, self.delete_box):
                 widget.configure(state="disabled")
             self.run_button.pack_forget()
@@ -619,7 +719,8 @@ class App:
         else:
             self.cancel_button.pack_forget()
             self.run_button.pack(side="left", before=self.folder_button)
-            for widget in (self.redo_box, self.summary_box, self.path_entry, self.try_button, self.delete_box):
+            for widget in (self.redo_box, self.summary_box, self.translate_box, self.path_entry, self.try_button,
+                           self.delete_box):
                 widget.configure(state="normal")
             self.ai_choice.configure(state="readonly" if self.found_ai else "disabled")
             self.refresh_after()
@@ -647,8 +748,13 @@ class App:
         self.lock_after(False)
         for child in self.result_buttons.winfo_children():
             child.destroy()
-        for name, key in (("meeting.checked.txt", "win.checked_text"), ("meeting.txt", "win.text"),
-                          ("meeting.summary.md", "win.summary_file"), ("meeting.live.summary.md", "win.summary_file")):
+        results = [("meeting.checked.txt", "win.checked_text"), ("meeting.txt", "win.text")]
+        for code in translator.LANGUAGES:
+            results += [(f"meeting.{code}.checked.txt", "win.checked_translation"), (f"meeting.{code}.txt", "win.translation"),
+                        (f"meeting.live.{code}.checked.txt", "win.checked_translation"),
+                        (f"meeting.live.{code}.txt", "win.translation")]
+        results += [("meeting.summary.md", "win.summary_file"), ("meeting.live.summary.md", "win.summary_file")]
+        for name, key in results:
             path = os.path.join(folder, name)
             label = t("win.open", what=t(key))
             if os.path.exists(path) and not any(b.cget("text") == label for b in self.result_buttons.winfo_children()):
@@ -686,6 +792,10 @@ class App:
                     self.text.insert("end", data + "\n", ("info",))
                     self.text.configure(state="disabled")
                     self.text.see("end")
+                elif kind == "translated":
+                    self.add_translation(*data)
+                elif kind == "translation_info":
+                    self.add_translation_info(data)
                 elif kind == "processed":
                     self.show_results(data)
         except queue.Empty:
