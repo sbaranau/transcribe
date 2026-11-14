@@ -1,7 +1,11 @@
 # transcribe
 
-Meeting transcription that runs on your own computer: recordings or live calls become a
-readable transcript with speakers and timestamps, optionally translated, checked and summarized.
+Private, local meeting transcription for Windows, macOS and Linux. Recordings and live calls
+become a readable transcript with speakers and timestamps, optionally translated, checked and
+summarized.
+
+**Current release: v1.2** — macOS support and a redesigned live interface with clearer setup,
+download progress, recording states and result creation. See the [changelog](CHANGELOG.md).
 
 ![The live window during a call: the transcript on the left, its German translation on the right](docs/screenshots/2-live.png)
 
@@ -23,13 +27,17 @@ readable transcript with speakers and timestamps, optionally translated, checked
   or a local model in Ollama or LM Studio): put in names and fix speaker borders, correct the
   translation, and write a summary that keeps every decision, task and date.
 - **Interface in English, German and Russian.**
+- **Guided live interface** that clearly separates setup, model download, recording, finalization
+  and result creation, with accessible progress and error states.
 
 **Privacy.** Transcription, speaker separation and translation run locally; no recording or text
 leaves the computer. Only the optional AI steps send the text to the AI you choose, under your
 own account, and only when you tick them. Use those only for meetings whose content the rules you
 work under allow. Tell the participants that a meeting is transcribed.
 
-## Install (Windows 10/11)
+## Install
+
+### Windows 10/11
 
 Needs `git` (`winget install --id Git.Git`), about 4 GB of disk (plus about 0.45 GB per
 translation direction, downloaded when first used) and an internet connection during the setup. An NVIDIA GPU is recommended; without one, everything runs on the CPU, several times
@@ -45,8 +53,26 @@ the packages and the models into `app\`; nothing else on the computer is changed
 makes three shortcuts with icons in the tool folder. Update with `git pull` and run the setup
 again.
 
-Linux (`linux/setup.sh`) works for transcription and the live mode, but is less tested; see the
-[technical description](docs/TECHNICAL.md#linux).
+### macOS
+
+Clone the repository, then double-click `macos/setup.command`:
+
+```bash
+git clone https://github.com/sbaranau/transcribe.git
+cd transcribe
+open macos/setup.command
+```
+
+After setup, use `Transcribe recording.command` or `Live transcription.command` in `macos/`.
+Recognition runs locally on the CPU. Translation models are downloaded with visible progress when
+a language pair is first selected. Live mode records a microphone; system audio requires a virtual
+CoreAudio loopback device, which can be selected as a microphone. macOS asks for microphone access
+on first use.
+
+### Linux
+
+Run `linux/setup.sh`. Linux supports files and live transcription through PulseAudio/PipeWire, but
+is less tested. See the [technical description](docs/TECHNICAL.md#macos-and-linux).
 
 ## Use
 
@@ -58,6 +84,11 @@ Linux (`linux/setup.sh`) works for transcription and the live mode, but is less 
 
 The shortcut names follow the interface language. You can switch it at the top right of the
 window, or with `--ui-language en|de|ru`.
+
+The live workflow has five explicit states: preparation, translation-model download, recording,
+finishing the last phrases, and creating results. The folder can be edited or chosen with the
+system dialog; less-used options stay under **Additional settings**. During recording, drafts are
+shown separately from confirmed text and the translation column can be hidden temporarily.
 
 <p>
 <img src="docs/screenshots/1-before.png" alt="Before the call: meeting language, translation, microphone and computer sound" width="49%">

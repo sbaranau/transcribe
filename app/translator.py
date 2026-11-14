@@ -14,8 +14,12 @@ import json
 import os
 import queue
 import re
+import subprocess
+import sys
 import threading
+import time
 import unicodedata
+import urllib.parse
 
 import numpy as np
 
@@ -55,13 +59,63 @@ def is_downloaded(direction: tuple[str, str]) -> bool:
     return all(os.path.isfile(os.path.join(folder_of(direction), name)) for name in FILES)
 
 
-def download(direction: tuple[str, str], report=print) -> None:
-    from huggingface_hub import hf_hub_download
+def download(direction: tuple[str, str], report=print, progress=None) -> None:
     repo, revision = MODELS[direction]
     report(f"Downloading the translation model {'-'.join(direction)} (about "
            f"{110 if VARIANT else 440} MB, once)...")
+    if sys.platform == "darwin":
+        completed = 0
+        for name in FILES:
+            target = os.path.join(folder_of(direction), name)
+            if os.path.isfile(target):
+                completed += os.path.getsize(target)
+                if progress:
+                    progress(completed)
+                continue
+            download_with_curl(repo, revision, name, folder_of(direction),
+                               progress=(lambda size, base=completed: progress(base + size)) if progress else None)
+            completed += os.path.getsize(target)
+            if progress:
+                progress(completed)
+        return
+    from huggingface_hub import hf_hub_download
     for name in FILES:
         hf_hub_download(repo, name, revision=revision, local_dir=folder_of(direction))
+
+
+def download_with_curl(repo: str, revision: str, name: str, folder: str, progress=None) -> None:
+    """Download one pinned Hugging Face file with macOS' system curl.
+
+    The Python HTTP stack can fail DNS resolution in some macOS launcher environments even while
+    system networking works. curl uses the system resolver and also gives us reliable retries and
+    an atomic final file.
+    """
+    target = os.path.join(folder, name)
+    if os.path.isfile(target):
+        return
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    partial = target + ".partial"
+    url = (f"https://huggingface.co/{repo}/resolve/{revision}/"
+           f"{urllib.parse.quote(name, safe='/')}")
+    process = subprocess.Popen(
+        ["/usr/bin/curl", "--fail", "--location", "--retry", "5", "--retry-all-errors",
+         "--connect-timeout", "20", "--silent", "--show-error", "--output", partial, url],
+        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    while process.poll() is None:
+        if progress and os.path.isfile(partial):
+            progress(os.path.getsize(partial))
+        time.sleep(0.25)
+    error = process.stderr.read() if process.stderr else ""
+    if process.returncode != 0:
+        try:
+            os.remove(partial)
+        except FileNotFoundError:
+            pass
+        detail = error.strip().splitlines()
+        raise RuntimeError(detail[-1] if detail else f"curl exited with code {process.returncode}")
+    if progress:
+        progress(os.path.getsize(partial))
+    os.replace(partial, target)
 
 
 class MarianOnnx:

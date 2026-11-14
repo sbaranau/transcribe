@@ -131,7 +131,8 @@ SPEAKER_LABELS = {"ru": "Говорящий", "uk": "Мовець", "de": "Sprec
 
 
 # What to run when something installed by the setup is missing.
-SETUP_HINT = r"windows\setup.cmd" if os.name == "nt" else "linux/setup.sh"
+SETUP_HINT = (r"windows\setup.cmd" if os.name == "nt" else
+              "macos/setup.command" if sys.platform == "darwin" else "linux/setup.sh")
 
 
 def add_cuda_dll_dirs() -> None:

@@ -3,8 +3,8 @@
 faster-whisper==1.2.1
 ctranslate2==4.9.0
 av==14.2.0
-nvidia-cublas-cu12==12.9.2.10
-nvidia-cudnn-cu12==9.28.1.4
+nvidia-cublas-cu12==12.9.2.10; sys_platform != "darwin"
+nvidia-cudnn-cu12==9.28.1.4; sys_platform != "darwin"
 # Voice separation (speaker diarization), CPU only; Apache-2.0. Added 2026-11-12.
 sherpa-onnx==2.0.1
 sherpa-onnx-core==2.0.1

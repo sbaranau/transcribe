@@ -30,7 +30,7 @@ transcript.
 
 ## Install and update
 
-Windows 10/11 or Linux (see "Linux" below), and `git` (`winget install --id Git.Git` on
+Windows 10/11, macOS, or Linux (see "macOS and Linux" below), and `git` (`winget install --id Git.Git` on
 Windows). [`uv`](https://docs.astral.sh/uv/) is installed by `windows\setup.cmd` with
 `winget install --id astral-sh.uv` when it is missing (winget may ask you to accept its
 agreements; the script accepts nothing for you):
@@ -114,6 +114,23 @@ number is known), `--ask`, `--check`, `--summary`, `--translate en|de|ru`,
 `--check-translation`, `--ai claude|codex|local` (default: the first one found), `--srt`,
 `--terms FILE`, `--no-terms`, `--no-filter`, `--out-dir DIR`, `--cpu`, `--model`,
 `--ui-language en|de|ru`, `--force`.
+
+## macOS and Linux
+
+On macOS, run `macos/setup.command`. It installs a private Python 3.12, the pinned packages and
+the models under `app/`, just like the other installers. Afterwards, double-click
+`macos/Transcribe recording.command` and drop a recording into its Terminal window, or use
+`macos/Live transcription.command`. Apple computers use CPU recognition; the macOS launchers add
+`--cpu` automatically and the NVIDIA packages are not installed. A required translation model is
+downloaded as soon as both the meeting language and translation language are selected, before the
+recording can start.
+
+CoreAudio does not expose speaker loopback recording to SoundCard. Consequently the macOS live
+window records microphones only. A separately installed CoreAudio loopback device may be chosen
+from the microphone list if system audio is needed. macOS will ask for microphone access the first
+time Terminal records; allow it in System Settings > Privacy & Security > Microphone.
+
+Linux uses `linux/setup.sh`; live system audio uses the PulseAudio/PipeWire monitor source.
 
 ## Live mode
 

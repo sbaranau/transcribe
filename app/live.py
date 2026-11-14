@@ -39,6 +39,10 @@ from ui_text import meeting_languages, t
 
 RATE = 16000
 BLOCK = RATE // 4  # 0.25 s per read
+# CoreAudio accepts an internal recorder block size only up to 512 frames. record(numframes=BLOCK)
+# still returns the same 0.25 s chunks used by the engine; this only changes SoundCard's device
+# buffer. WASAPI and PulseAudio keep the original block size.
+RECORDER_BLOCKSIZE = 512 if sys.platform == "darwin" else BLOCK
 # Final pieces of 20-29 s, close to Whisper's 30 s window. Replaying recordings through this
 # engine and comparing with a full transcription of the same file (2026-11-12): 8-25 s pieces
 # agreed 42% (84 s Russian call) and 88.9% (17 min AMI meeting), 15-28 s 74% / 92.3%, 20-29 s
@@ -120,7 +124,11 @@ def words(text: str) -> list[str]:
 def list_devices() -> tuple[list, object, list]:
     """(microphones, default microphone, output devices)."""
     import soundcard as sc
-    return sc.all_microphones(), sc.default_microphone(), sc.all_speakers()
+    # SoundCard cannot record a speaker loopback through CoreAudio.  Do not offer speakers on
+    # macOS: selecting one would only fail when recording starts.  A virtual loopback device can
+    # still be selected as a microphone when the user has installed one.
+    speakers = [] if sys.platform == "darwin" else sc.all_speakers()
+    return sc.all_microphones(), sc.default_microphone(), speakers
 
 
 def loopback_of(sc, speaker):
@@ -148,7 +156,8 @@ class Source(threading.Thread):
     def run(self) -> None:
         warnings.simplefilter("ignore")  # soundcard warns about discontinuities in silence
         try:
-            with self.device.recorder(samplerate=RATE, channels=1, blocksize=BLOCK) as recorder:
+            with self.device.recorder(samplerate=RATE, channels=1,
+                                      blocksize=RECORDER_BLOCKSIZE) as recorder:
                 while self.running:
                     self.blocks.put(recorder.record(numframes=BLOCK)[:, 0].astype(np.float32))
         except Exception as error:  # device unplugged or busy: the others go on

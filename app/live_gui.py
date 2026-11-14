@@ -25,7 +25,7 @@ import sys
 import threading
 import time
 import tkinter as tk
-from tkinter import font as tkfont, messagebox, ttk
+from tkinter import filedialog, font as tkfont, messagebox, ttk
 
 import ai_engines
 import live
@@ -59,7 +59,11 @@ class App:
         self.restart = None  # set to (model, hotwords) when the interface language changes
         self.processing = None  # the child process of the full processing while it runs
         self.live_translator = None
+        self.translation_prepare_id = 0
+        self.translation_loading = False
+        self.translation_loading_pair = None
         self.translation_text = None
+        self.translation_column = None
         self.pending_shots = []  # (seconds, path) whose mark waits for the end of its paragraph
         self.shot_count = 0
         self.shot_savers = []
@@ -85,6 +89,7 @@ class App:
         style.configure("TLabel", font=(FONT, 10))
         style.configure("TCheckbutton", font=(FONT, 10))
         style.configure("Head.TLabel", font=(FONT, 14, "bold"))
+        style.configure("Column.TLabel", font=(FONT, 11, "bold"))
         style.configure("Note.TLabel", foreground=GREY, font=(FONT, 9))
 
         self.build_header()
@@ -107,7 +112,10 @@ class App:
     def build_header(self) -> None:
         bar = ttk.Frame(self.root, padding=(14, 12, 14, 8))
         bar.pack(fill="x")
-        ttk.Label(bar, text=t("win.title"), style="Head.TLabel").pack(side="left")
+        title_box = ttk.Frame(bar)
+        title_box.pack(side="left")
+        ttk.Label(title_box, text=t("win.title"), style="Head.TLabel").pack(anchor="w")
+        ttk.Label(title_box, text=t("win.subtitle"), style="Note.TLabel").pack(anchor="w", pady=(1, 0))
         # Top right, before the recording only: a change rebuilds the window around the loaded
         # model, so it is usable once the model is there.
         self.interface_box = ttk.Frame(bar)
@@ -127,14 +135,19 @@ class App:
     def build_setup(self) -> ttk.Frame:
         frame = ttk.LabelFrame(self.root, text=t("win.before"), padding=12)
         frame.columnconfigure(1, weight=1)
+        self.advanced_visible = False
+        self.advanced_widgets = []
 
         remembered = self.load_ui_settings()
+        if not self.args.out_dir and remembered.get("folder"):
+            self.base_folder = os.path.abspath(os.path.expanduser(remembered["folder"]))
         self.languages = [(None, t("meeting.auto"))] + ui_text.meeting_languages()
         ttk.Label(frame, text=t("win.language")).grid(row=0, column=0, sticky="w", pady=3)
         self.language = ttk.Combobox(frame, state="readonly", values=[name for _, name in self.languages], width=34)
         wanted = self.args.language or remembered.get("language") or None
         default = next((i for i, (code, _) in enumerate(self.languages) if code == wanted), 0)
         self.language.current(default)
+        self.language.bind("<<ComboboxSelected>>", self.prepare_translation)
         self.language.grid(row=0, column=1, sticky="w", pady=3)
 
         # Translation while it happens: none, or into one of the interface languages.
@@ -145,10 +158,15 @@ class App:
         self.translate_to = ttk.Combobox(line, state="readonly", values=[name for _, name in self.targets], width=34)
         wanted = remembered.get("translate") or None
         self.translate_to.current(next((i for i, (code, _) in enumerate(self.targets) if code == wanted), 0))
+        self.translate_to.bind("<<ComboboxSelected>>", self.prepare_translation)
         self.translate_to.pack(anchor="w")
-        ttk.Label(line, text=t("win.translate_note"), style="Note.TLabel", wraplength=520).pack(anchor="w", pady=(2, 0))
+        self.translation_note = ttk.Label(line, text=t("win.translate_note"), style="Note.TLabel", wraplength=520)
+        self.translation_note.pack(anchor="w", pady=(2, 0))
+        self.translation_progress = ttk.Progressbar(
+            line, mode="determinate" if sys.platform == "darwin" else "indeterminate", length=300)
 
         microphones, default_microphone, speakers = live.list_devices()
+        self.has_computer_audio = bool(speakers)
         self.microphones = {m.name: m for m in microphones}
         ttk.Label(frame, text=t("win.microphone")).grid(row=2, column=0, sticky="w", pady=3)
         self.microphone = ttk.Combobox(frame, state="readonly", width=50,
@@ -162,16 +180,20 @@ class App:
             self.microphone.set(default_microphone.name)
         self.microphone.grid(row=2, column=1, sticky="w", pady=3)
 
-        ttk.Label(frame, text=t("win.computer")).grid(row=3, column=0, sticky="nw", pady=3)
-        box = ttk.Frame(frame)
-        box.grid(row=3, column=1, sticky="w", pady=3)
         self.speakers = []
-        for speaker in speakers:
-            var = tk.BooleanVar(value=True)
-            ttk.Checkbutton(box, text=speaker.name, variable=var).pack(anchor="w")
-            self.speakers.append((speaker, var))
-        ttk.Label(box, text=t("win.all_devices"),
-                  style="Note.TLabel", wraplength=520).pack(anchor="w")
+        self.speaker_buttons = []
+        if speakers:
+            ttk.Label(frame, text=t("win.computer")).grid(row=3, column=0, sticky="nw", pady=3)
+            box = ttk.Frame(frame)
+            box.grid(row=3, column=1, sticky="w", pady=3)
+            for speaker in speakers:
+                var = tk.BooleanVar(value=True)
+                button = ttk.Checkbutton(box, text=speaker.name, variable=var)
+                button.pack(anchor="w")
+                self.speaker_buttons.append(button)
+                self.speakers.append((speaker, var))
+            ttk.Label(box, text=t("win.all_devices"),
+                      style="Note.TLabel", wraplength=520).pack(anchor="w")
 
         # Screenshots with a button during the recording: of which screen.
         self.screens = []
@@ -185,26 +207,139 @@ class App:
             if len(found) > 1:
                 self.screens.append((t("win.screen_all"), screenshots.all_screens(found)))
         if self.screens:
-            ttk.Label(frame, text=t("win.shots_of")).grid(row=4, column=0, sticky="nw", pady=(6, 3))
+            screen_label = ttk.Label(frame, text=t("win.shots_of"))
+            screen_label.grid(row=5, column=0, sticky="nw", pady=(6, 3))
             line = ttk.Frame(frame)
-            line.grid(row=4, column=1, sticky="w", pady=3)
+            line.grid(row=5, column=1, sticky="w", pady=3)
             self.screen_choice = ttk.Combobox(line, state="readonly", width=34,
                                               values=[name for name, _ in self.screens])
             wanted = remembered.get("screen", "")
             self.screen_choice.current(int(wanted) if wanted.isdigit() and int(wanted) < len(self.screens) else 0)
             self.screen_choice.pack(anchor="w")
             ttk.Label(line, text=t("win.shots_note"), style="Note.TLabel", wraplength=520).pack(anchor="w", pady=(2, 0))
+            self.advanced_widgets.extend((screen_label, line))
 
-        ttk.Label(frame, text=t("win.folder")).grid(row=5, column=0, sticky="w", pady=3)
-        self.folder_label = ttk.Label(frame, text=os.path.join(self.base_folder, t("win.date_time")))
-        self.folder_label.grid(row=5, column=1, sticky="w", pady=3)
+        folder_label = ttk.Label(frame, text=t("win.folder"))
+        folder_label.grid(row=6, column=0, sticky="w", pady=3)
+        folder_line = ttk.Frame(frame)
+        folder_line.grid(row=6, column=1, sticky="ew", pady=3)
+        self.folder_var = tk.StringVar(value=self.base_folder)
+        self.folder_entry = ttk.Entry(folder_line, textvariable=self.folder_var, width=52)
+        self.folder_entry.pack(side="left", fill="x", expand=True)
+        ttk.Button(folder_line, text=t("win.choose_folder"), command=self.choose_base_folder).pack(
+            side="left", padx=(6, 0))
+        ttk.Label(folder_line, text=t("win.date_time"), style="Note.TLabel").pack(side="left", padx=(6, 0))
+        self.advanced_widgets.extend((folder_label, folder_line))
 
-        ttk.Label(frame, text=t("win.tell_people"),
-                  foreground=RED).grid(row=6, column=0, columnspan=2, sticky="w", pady=(8, 4))
-        self.start_button = ttk.Button(frame, text=t("win.start"), style="Big.TButton",
-                                       command=self.start, state="disabled")
-        self.start_button.grid(row=7, column=0, columnspan=2, sticky="w", pady=(6, 0))
+        self.advanced_button = ttk.Button(
+            frame, text="▸  " + t("win.advanced"), command=self.toggle_advanced)
+        self.advanced_button.grid(row=4, column=0, columnspan=2, sticky="w", pady=(7, 2))
+        for widget in self.advanced_widgets:
+            widget.grid_remove()
+
+        tk.Label(
+            frame, text=t("win.tell_people"), background="#fff3c4", foreground="#5d4300",
+            font=(FONT, 10), anchor="w", padx=10, pady=7).grid(
+                row=7, column=0, columnspan=2, sticky="ew", pady=(10, 4))
+        # The native macOS ttk button is deliberately subdued and ignores custom background
+        # colours. This is the primary action, so use a classic button with an explicit treatment.
+        self.start_button = tk.Button(
+            frame, text=t("win.start"), command=self.start, state="disabled",
+            font=(FONT, 14, "bold"), background=RED, foreground="white",
+            activebackground="#a91f1f", activeforeground="white",
+            disabledforeground="#777777",
+            relief="flat", borderwidth=0, padx=24, pady=10, cursor="hand2")
+        self.start_button.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(10, 2))
         return frame
+
+    def toggle_advanced(self) -> None:
+        self.advanced_visible = not self.advanced_visible
+        for widget in self.advanced_widgets:
+            widget.grid() if self.advanced_visible else widget.grid_remove()
+        self.advanced_button.configure(
+            text=("▾  " if self.advanced_visible else "▸  ") + t("win.advanced"))
+
+    def choose_base_folder(self) -> None:
+        chosen = filedialog.askdirectory(
+            parent=self.root, initialdir=self.folder_var.get() or self.base_folder,
+            title=t("win.choose_folder"))
+        if chosen:
+            self.folder_var.set(chosen)
+
+    def prepare_translation(self, _event=None) -> None:
+        """Download the selected language pair before recording, once, in the background."""
+        source = self.languages[self.language.current()][0]
+        target = self.targets[self.translate_to.current()][0]
+        pair = (source, target)
+        if self.translation_loading and pair == self.translation_loading_pair:
+            return
+        self.translation_prepare_id += 1
+        request_id = self.translation_prepare_id
+        self.translation_loading = False
+        self.translation_loading_pair = None
+        if not target:
+            self.translation_note.configure(text=t("win.translate_note"), foreground=GREY)
+            self.refresh_start_button()
+            return
+        if source not in translator.LANGUAGES:
+            self.translation_note.configure(text=t("win.translate_choose_source"), foreground=GREY)
+            self.refresh_start_button()
+            return
+        directions = translator.route(source, target)
+        if not directions or all(translator.is_downloaded(direction) for direction in directions):
+            self.translation_note.configure(text=t("win.translate_ready"), foreground=GREEN)
+            self.refresh_start_button()
+            return
+        self.translation_loading = True
+        self.translation_loading_pair = pair
+        self.translation_expected_mb = 440 * len(directions)
+        self.translation_progress.configure(maximum=self.translation_expected_mb, value=0)
+        self.translation_note.configure(text=t("win.translate_loading"), foreground=GREY)
+        self.set_translation_busy(True)
+        self.refresh_start_button()
+
+        def download() -> None:
+            try:
+                completed = 0
+                for direction in directions:
+                    if not translator.is_downloaded(direction):
+                        translator.download(
+                            direction, report=lambda message: print(message, flush=True),
+                            progress=lambda size, base=completed: self.events.put(
+                                ("translation_progress", (request_id, base + size))))
+                    completed += sum(os.path.getsize(os.path.join(translator.folder_of(direction), name))
+                                     for name in translator.FILES)
+                self.events.put(("translation_prepared", (request_id, None)))
+            except Exception as error:
+                import traceback
+                traceback.print_exc()
+                self.events.put(("translation_prepared", (request_id, str(error))))
+
+        threading.Thread(target=download, daemon=True).start()
+
+    def set_translation_busy(self, busy: bool) -> None:
+        """Lock setup controls and show activity while a translation model is downloaded."""
+        state = "disabled" if busy else "readonly"
+        for widget in (self.language, self.translate_to, self.microphone):
+            widget.configure(state=state)
+        for widget in self.speaker_buttons:
+            widget.configure(state="disabled" if busy else "normal")
+        if self.screens:
+            self.screen_choice.configure(state=state)
+        if busy:
+            self.translation_progress.pack(anchor="w", fill="x", pady=(5, 2))
+            if sys.platform != "darwin":
+                self.translation_progress.start(12)
+        else:
+            self.translation_progress.stop()
+            self.translation_progress.pack_forget()
+
+    def refresh_start_button(self) -> None:
+        enabled = self.model is not None and not self.translation_loading
+        self.start_button.configure(
+            state="normal" if enabled else "disabled",
+            background=RED if enabled else "#d7d7d7",
+            foreground="white" if enabled else "#777777")
 
     @staticmethod
     def load_ui_settings() -> dict:
@@ -230,6 +365,7 @@ class App:
         return {"language": self.languages[self.language.current()][0] or "",
                 "microphone": microphone if microphone in self.microphones else NO_MICROPHONE,
                 "translate": self.targets[self.translate_to.current()][0] or "",
+                "folder": self.folder_var.get().strip(),
                 "screen": str(self.screen_choice.current()) if self.screens else ""}
 
     def change_interface(self, _event=None) -> None:
@@ -247,7 +383,10 @@ class App:
     def build_meters(self) -> ttk.Frame:
         frame = ttk.Frame(self.root)
         self.meters = {}
-        for row, (key, title) in enumerate((("microphone", t("win.meter_mic")), ("computer", t("win.meter_computer")))):
+        meters = [("microphone", t("win.meter_mic"))]
+        if self.has_computer_audio:
+            meters.append(("computer", t("win.meter_computer")))
+        for row, (key, title) in enumerate(meters):
             ttk.Label(frame, text=title, width=16).grid(row=row, column=0, sticky="w")
             canvas = tk.Canvas(frame, height=14, width=360, highlightthickness=0, background="#e6e6e6")
             canvas.grid(row=row, column=1, sticky="w", pady=2)
@@ -265,21 +404,53 @@ class App:
         frame = ttk.Frame(self.root)
         self.panes = ttk.PanedWindow(frame, orient="horizontal")
         self.panes.pack(fill="both", expand=True)
-        left, self.text = self.text_column(self.panes)
+        left, self.text = self.text_column(self.panes, t("win.transcript_head"))
         self.panes.add(left, weight=1)
         self.apply_text_size()
         self.text.insert("end", t("win.text_hint"), ("hint",))
         self.text.configure(state="disabled")
         self.to_end = ttk.Button(left, text=t("win.to_end"), command=self.scroll_to_end)
+        self.draft_bar = tk.Label(
+            frame, background="#eef2f5", foreground="#555555", font=(FONT, 11, "italic"),
+            anchor="w", justify="left", padx=12, pady=8, wraplength=820)
+        # Shown immediately after Stop. Final Whisper chunks and a queued translation can take
+        # tens of seconds, so a small status in the title bar is too easy to miss.
+        self.stopping_overlay = tk.Frame(
+            frame, background="#fff3c4", highlightbackground="#d6a928",
+            highlightthickness=1, padx=28, pady=22)
+        tk.Label(
+            self.stopping_overlay, text=t("win.stopping"), background="#fff3c4",
+            foreground="#4f3900", font=(FONT, 14, "bold")).pack(pady=(0, 12))
+        self.stop_stage_recorded = tk.Label(
+            self.stopping_overlay, text="✓  " + t("win.stage_recorded"), background="#fff3c4",
+            foreground=GREEN, font=(FONT, 11), anchor="w")
+        self.stop_stage_recorded.pack(fill="x", pady=2)
+        self.stop_stage_phrases = tk.Label(
+            self.stopping_overlay, text="●  " + t("win.stage_phrases"), background="#fff3c4",
+            foreground="#4f3900", font=(FONT, 11, "bold"), anchor="w")
+        self.stop_stage_phrases.pack(fill="x", pady=2)
+        self.stop_stage_translation = tk.Label(
+            self.stopping_overlay, text="○  " + t("win.stage_translation"), background="#fff3c4",
+            foreground=GREY, font=(FONT, 11), anchor="w")
+        self.stop_stage_translation.pack(fill="x", pady=2)
+        self.stopping_progress = ttk.Progressbar(
+            self.stopping_overlay, mode="indeterminate", length=320)
+        self.stopping_progress.pack(fill="x", pady=(12, 8))
+        tk.Label(
+            self.stopping_overlay, text=t("win.stopping_safe"), background="#fff3c4",
+            foreground="#5d4300", font=(FONT, 9)).pack()
         return frame
 
     @staticmethod
     def text_column(parent, title: str | None = None) -> tuple[ttk.Frame, tk.Text]:
         column = ttk.Frame(parent)
         if title:
-            ttk.Label(column, text=title, style="Note.TLabel").pack(anchor="w", padx=4, pady=(0, 2))
+            ttk.Label(column, text=title, style="Column.TLabel").pack(anchor="w", padx=4, pady=(0, 5))
+        # Tk on macOS inherits the system text colour even though this widget has an explicit
+        # light background. In Dark Mode that produces white text on an almost white field.
         text = tk.Text(column, wrap="word", font=(FONT, 13), padx=12, pady=10, relief="flat",
-                       background="#fbfbfb", spacing3=4, height=8)
+                       background="#fbfbfb", foreground="#1f1f1f", insertbackground="#1f1f1f",
+                       selectbackground="#b7d7f5", selectforeground="#111111", spacing3=4, height=8)
         scroll = ttk.Scrollbar(column, command=text.yview)
         text.configure(yscrollcommand=scroll.set)
         scroll.pack(side="right", fill="y")
@@ -288,9 +459,23 @@ class App:
 
     def add_translation_column(self, name: str) -> None:
         right, self.translation_text = self.text_column(self.panes, t("win.translation_head", language=name))
+        self.translation_column = right
         self.translation_text.configure(background="#f6f8fb", state="disabled")
         self.panes.add(right, weight=1)
+        self.translation_view_button.configure(text=t("win.hide_translation"))
+        self.translation_view_button.pack(side="right", padx=(0, 12))
         self.apply_text_size()
+
+    def toggle_translation_column(self) -> None:
+        if self.translation_column is None:
+            return
+        visible = str(self.translation_column) in self.panes.panes()
+        if visible:
+            self.panes.forget(self.translation_column)
+            self.translation_view_button.configure(text=t("win.show_translation"))
+        else:
+            self.panes.add(self.translation_column, weight=1)
+            self.translation_view_button.configure(text=t("win.hide_translation"))
 
     def build_controls(self) -> ttk.Frame:
         frame = ttk.Frame(self.root)
@@ -305,6 +490,7 @@ class App:
         ttk.Button(frame, text=t("win.copy"), command=self.copy_text).pack(side="left", padx=(6, 0))
         ttk.Button(frame, text="A+", width=4, command=lambda: self.change_size(1)).pack(side="right")
         ttk.Button(frame, text="A−", width=4, command=lambda: self.change_size(-1)).pack(side="right", padx=(0, 4))
+        self.translation_view_button = ttk.Button(frame, command=self.toggle_translation_column)
         return frame
 
     def apply_text_size(self) -> None:
@@ -313,9 +499,9 @@ class App:
                 continue
             text.configure(font=(FONT, self.text_size))
             text.tag_configure("time", foreground=GREY, font=(FONT, max(8, self.text_size - 3)))
-            text.tag_configure("draft", foreground="#9a9a9a", font=(FONT, self.text_size, "italic"))
-            text.tag_configure("hint", foreground=GREY)
-            text.tag_configure("info", foreground=GREY, font=(FONT, max(8, self.text_size - 3), "italic"))
+            text.tag_configure("draft", foreground="#737373", font=(FONT, self.text_size, "italic"))
+            text.tag_configure("hint", foreground="#666666")
+            text.tag_configure("info", foreground="#595959", font=(FONT, max(8, self.text_size - 3), "italic"))
             text.tag_configure("me", foreground="#1565c0", font=(FONT, self.text_size, "bold"))
             text.tag_configure("others", foreground="#2e7d32", font=(FONT, self.text_size, "bold"))
             text.tag_configure("shot", foreground="#1565c0", underline=True, font=(FONT, max(8, self.text_size - 2)))
@@ -347,6 +533,9 @@ class App:
             return
         language = self.languages[self.language.current()][0]
         self.args.language = language
+        entered_folder = self.folder_var.get().strip()
+        if entered_folder:
+            self.base_folder = os.path.abspath(os.path.expanduser(entered_folder))
         self.save_ui_settings(self.chosen_settings())
         folder = os.path.join(self.base_folder, time.strftime("%Y-%m-%d %H-%M"))
         try:
@@ -438,23 +627,39 @@ class App:
     def stop(self) -> None:
         if not self.session or self.session.stopping.is_set():
             return  # a second click while stopping does nothing
-        self.stop_button.configure(state="disabled")
+        self.stop_button.configure(text=t("win.stopping_short"), state="disabled")
         self.status.configure(text=t("win.stopping"), foreground=GREY)
+        self.stopping_overlay.place(relx=0.5, rely=0.5, anchor="center")
+        self.stopping_overlay.lift()
+        if self.live_translator:
+            self.stop_stage_translation.pack(fill="x", pady=2, before=self.stopping_progress)
+        else:
+            self.stop_stage_translation.pack_forget()
+        self.stopping_progress.start(12)
+        self.root.update_idletasks()
         threading.Thread(target=self.finish_session, daemon=True).start()
 
     def finish_session(self) -> None:
-        self.session.stop()
-        if self.live_translator:
-            self.live_translator.finish()  # translates what is still waiting
-        for saver in self.shot_savers:
-            saver.join()
-        if self.shot_savers:
-            folder = os.path.dirname(self.session.txt_path)
-            screenshots.write_markdown_for(
-                [self.session.txt_path] + [os.path.join(folder, f"meeting.live.{code}.txt") for code in translator.LANGUAGES],
-                report=lambda line: print(line, flush=True))
-        self.events.put(("stopped", None))
-        self.session.stopping.set()
+        try:
+            self.session.stop()
+            if self.live_translator:
+                self.events.put(("stopping_stage", "translation"))
+                self.live_translator.finish()  # translates what is still waiting
+            for saver in self.shot_savers:
+                saver.join()
+            if self.shot_savers:
+                folder = os.path.dirname(self.session.txt_path)
+                screenshots.write_markdown_for(
+                    [self.session.txt_path] + [os.path.join(folder, f"meeting.live.{code}.txt")
+                                               for code in translator.LANGUAGES],
+                    report=lambda line: print(line, flush=True))
+            self.events.put(("stopped", None))
+        except Exception as error:
+            import traceback
+            traceback.print_exc()
+            self.events.put(("stop_failed", str(error)))
+        finally:
+            self.session.stopping.set()
 
     # --- text -------------------------------------------------------------------------------------
 
@@ -534,13 +739,14 @@ class App:
         follow = self.at_end()
         self.text.configure(state="normal")
         self.text.delete("draft", "end-1c")
-        shown = 0
-        for label, text in self.drafts.items():
-            if text:
-                gap = "\n\n" if shown or self.text.compare("draft", ">", "1.0") else ""
-                self.text.insert("end-1c", gap + (f"{label}: " if label else "") + text + " …", ("draft",))
-                shown += 1
         self.text.configure(state="disabled")
+        shown = [(f"{label}: " if label else "") + text for label, text in self.drafts.items() if text]
+        if shown:
+            self.draft_bar.configure(text=t("win.draft", text="  ·  ".join(shown)))
+            if not self.draft_bar.winfo_manager():
+                self.draft_bar.pack(side="bottom", fill="x", pady=(6, 0))
+        else:
+            self.draft_bar.pack_forget()
         self.after_insert(follow)
 
     def show_mic_warning(self, silent: bool) -> None:
@@ -577,6 +783,8 @@ class App:
     def show_after(self) -> None:
         if self.after_frame is not None:
             return
+        self.stopping_progress.stop()
+        self.stopping_overlay.place_forget()
         self.meters_frame.pack_forget()
         self.interface_box.pack_forget()
         self.controls_frame.pack_forget()
@@ -597,6 +805,10 @@ class App:
         self.text_frame.pack(fill="both", expand=True, padx=14, pady=(0, 8))
         ttk.Label(frame, text=t("win.live_saved", path=self.session.txt_path), style="Note.TLabel",
                   wraplength=760).grid(row=0, column=0, columnspan=3, sticky="w")
+        ttk.Label(frame, text=t("win.after_intro"), wraplength=760).grid(
+            row=1, column=0, columnspan=3, sticky="w", pady=(6, 10))
+        ttk.Label(frame, text=t("win.section_transcript"), style="Note.TLabel").grid(
+            row=2, column=0, columnspan=3, sticky="w", pady=(0, 2))
 
         self.redo = tk.BooleanVar(value=True)
         self.split = tk.BooleanVar(value=False)
@@ -605,25 +817,25 @@ class App:
         self.summary = tk.BooleanVar(value=False)
         self.delete_sound = tk.BooleanVar(value=False)
         self.redo_box = ttk.Checkbutton(frame, text=t("win.redo"), variable=self.redo, command=self.refresh_after)
-        self.redo_box.grid(row=1, column=0, columnspan=3, sticky="w", pady=(8, 2))
+        self.redo_box.grid(row=3, column=0, columnspan=3, sticky="w", pady=2)
         call = len(self.session.streams) >= 2 if hasattr(self.session, "streams") else False
         self.is_call = call  # a call has "Вы" / "Собеседники" labels even without the separation
         self.split_box = ttk.Checkbutton(
             frame, text=t("win.split_call") if call else t("win.split"), variable=self.split,
             command=self.refresh_after)
-        self.split_box.grid(row=2, column=0, sticky="w", padx=(22, 0), pady=2)
+        self.split_box.grid(row=4, column=0, sticky="w", padx=(22, 0), pady=2)
         self.count_box = ttk.Spinbox(frame, from_=0, to=20, width=4, textvariable=self.count)
-        self.count_box.grid(row=2, column=1, sticky="w", pady=2)
+        self.count_box.grid(row=4, column=1, sticky="w", pady=2)
         ttk.Label(frame, text=t("win.count_note_call") if call else t("win.count_note"),
-                  style="Note.TLabel").grid(row=2, column=2, sticky="w", padx=6)
+                  style="Note.TLabel").grid(row=4, column=2, sticky="w", padx=6)
         self.check_box = ttk.Checkbutton(frame, text=t("win.check"),
                                          variable=self.check, command=self.refresh_after)
-        self.check_box.grid(row=3, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=2)
+        self.check_box.grid(row=5, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=2)
         live_target = self.live_translator.target if self.live_translator else None
         self.translate = tk.BooleanVar(value=bool(live_target))
         self.check_translation = tk.BooleanVar(value=False)
         line = ttk.Frame(frame)
-        line.grid(row=4, column=0, columnspan=3, sticky="w", pady=2)
+        line.grid(row=6, column=0, columnspan=3, sticky="w", pady=(8, 2))
         self.translate_box = ttk.Checkbutton(line, text=t("win.after_translate"), variable=self.translate,
                                              command=self.refresh_after)
         self.translate_box.pack(side="left")
@@ -636,18 +848,18 @@ class App:
         ttk.Label(line, text=t("win.translate_local"), style="Note.TLabel").pack(side="left", padx=4)
         self.check_translation_box = ttk.Checkbutton(frame, text=t("win.check_translation"),
                                                      variable=self.check_translation, command=self.refresh_after)
-        self.check_translation_box.grid(row=5, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=2)
+        self.check_translation_box.grid(row=7, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=2)
         self.summary_box = ttk.Checkbutton(frame, text=t("win.summary"), variable=self.summary,
                                            command=self.refresh_after)
-        self.summary_box.grid(row=6, column=0, columnspan=3, sticky="w", pady=2)
+        self.summary_box.grid(row=8, column=0, columnspan=3, sticky="w", pady=(8, 2))
 
         self.ai_row = ttk.Frame(frame)
-        self.ai_row.grid(row=7, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=(4, 2))
+        self.ai_row.grid(row=9, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=(4, 2))
         ttk.Label(self.ai_row, text=t("win.ai")).pack(side="left")
         self.ai_choice = ttk.Combobox(self.ai_row, state="disabled", width=52)
         self.ai_choice.pack(side="left", padx=6)
         self.ai_note = ttk.Label(frame, text=t("win.searching"), style="Note.TLabel", wraplength=760)
-        self.ai_note.grid(row=8, column=0, columnspan=3, sticky="w", padx=(22, 0))
+        self.ai_note.grid(row=10, column=0, columnspan=3, sticky="w", padx=(22, 0))
         self.path_row = ttk.Frame(frame)
         ttk.Label(self.path_row, text=t("win.path"), wraplength=740).pack(anchor="w")
         entry_line = ttk.Frame(self.path_row)
@@ -657,13 +869,17 @@ class App:
         self.try_button = ttk.Button(entry_line, text=t("win.try_path"), command=self.try_path)
         self.try_button.pack(side="left", padx=6)
         self.ai_warning = ttk.Label(frame, foreground=RED, wraplength=760, text=t("win.ai_rules"))
-        self.ai_warning.grid(row=10, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=(2, 4))
+        self.ai_warning.grid(row=12, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=(2, 4))
 
         self.delete_box = ttk.Checkbutton(frame, text=t("win.delete_sound"), variable=self.delete_sound)
-        self.delete_box.grid(row=11, column=0, columnspan=3, sticky="w", pady=2)
+        self.delete_box.grid(row=13, column=0, columnspan=3, sticky="w", pady=(8, 2))
         buttons = ttk.Frame(frame)
-        buttons.grid(row=12, column=0, columnspan=3, sticky="w", pady=(10, 0))
-        self.run_button = ttk.Button(buttons, text=t("win.run"), style="Big.TButton", command=self.run_processing)
+        buttons.grid(row=14, column=0, columnspan=3, sticky="w", pady=(10, 0))
+        self.run_button = tk.Button(
+            buttons, text=t("win.run"), command=self.run_processing,
+            font=(FONT, 12, "bold"), background=GREEN, foreground="white",
+            activebackground="#245c2a", activeforeground="white", disabledforeground="#777777",
+            relief="flat", borderwidth=0, padx=20, pady=8, cursor="hand2")
         self.run_button.pack(side="left")
         # Takes the place of Run while the processing runs.
         self.cancel_button = ttk.Button(buttons, text=t("win.cancel"), style="Big.TButton",
@@ -673,8 +889,15 @@ class App:
         # The texts with screenshots (Markdown) as HTML with the pictures inside, for any browser.
         self.export_button = ttk.Button(buttons, text=t("win.export_html"), command=self.export_html)
         self.export_button.pack(side="left", padx=(6, 0))
-        self.result_buttons = ttk.Frame(buttons)
-        self.result_buttons.pack(side="left", padx=(18, 0))
+        self.results_heading = ttk.Label(frame, text=t("win.ready_results"), style="Note.TLabel")
+        self.result_buttons = ttk.Frame(frame)
+        ttk.Label(frame, text=t("win.processing_estimate"), style="Note.TLabel", wraplength=760).grid(
+            row=15, column=0, columnspan=3, sticky="w", pady=(6, 0))
+        self.processing_panel = ttk.Frame(frame)
+        ttk.Label(self.processing_panel, text=t("win.processing_visible"), font=(FONT, 10, "bold")).pack(
+            anchor="w", pady=(0, 6))
+        self.processing_progress = ttk.Progressbar(self.processing_panel, mode="indeterminate", length=520)
+        self.processing_progress.pack(fill="x")
         self.refresh_export()
         self.refresh_after()
         threading.Thread(target=lambda: self.events.put(
@@ -702,7 +925,7 @@ class App:
             else:
                 widget.grid_remove()
         if needs_ai and not self.found_ai and self.ai_note.cget("text") != t("win.searching"):
-            self.path_row.grid(row=9, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=2)
+            self.path_row.grid(row=11, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=2)
         else:
             self.path_row.grid_remove()
 
@@ -810,7 +1033,11 @@ class App:
             self.run_button.pack_forget()
             self.cancel_button.configure(state="normal")
             self.cancel_button.pack(side="left", before=self.folder_button)
+            self.processing_panel.grid(row=16, column=0, columnspan=3, sticky="ew", pady=(12, 2))
+            self.processing_progress.start(12)
         else:
+            self.processing_progress.stop()
+            self.processing_panel.grid_remove()
             self.cancel_button.pack_forget()
             self.run_button.pack(side="left", before=self.folder_button)
             for widget in (self.redo_box, self.summary_box, self.translate_box, self.path_entry, self.try_button,
@@ -882,8 +1109,10 @@ class App:
             path = os.path.join(folder, name)
             label = t("win.open", what=t(key))
             if os.path.exists(path) and not any(b.cget("text") == label for b in self.result_buttons.winfo_children()):
+                self.results_heading.grid(row=17, column=0, columnspan=3, sticky="w", pady=(14, 3))
+                self.result_buttons.grid(row=18, column=0, columnspan=3, sticky="w")
                 ttk.Button(self.result_buttons, text=label,
-                           command=lambda p=path: tool.open_path(p)).pack(side="left", padx=(0, 6))
+                           command=lambda p=path: tool.open_path(p)).pack(anchor="w", pady=2)
 
     # --- events -----------------------------------------------------------------------------------
 
@@ -894,8 +1123,9 @@ class App:
                 if kind == "model":
                     self.model, self.hotwords, note = data
                     self.status.configure(text=t("win.ready"), foreground=GREEN)
-                    self.start_button.configure(state="normal")
+                    self.refresh_start_button()
                     self.interface.configure(state="readonly")
+                    self.prepare_translation()
                 elif kind == "model_failed":
                     self.status.configure(text=t("win.model_failed"), foreground=RED)
                     messagebox.showerror(t("win.error"), t("win.model_failed_text", error=data, setup=tool.SETUP_HINT))
@@ -910,6 +1140,18 @@ class App:
                 elif kind == "stopped":
                     self.add_shot_marks(before=None)
                     self.show_after()
+                elif kind == "stopping_stage":
+                    if data == "translation":
+                        self.stop_stage_phrases.configure(
+                            text="✓  " + t("win.stage_phrases"), foreground=GREEN, font=(FONT, 11))
+                        self.stop_stage_translation.configure(
+                            text="●  " + t("win.stage_translation"), foreground="#4f3900",
+                            font=(FONT, 11, "bold"))
+                elif kind == "stop_failed":
+                    self.stopping_progress.stop()
+                    self.stopping_overlay.place_forget()
+                    self.status.configure(text=t("win.error"), foreground=RED)
+                    messagebox.showerror(t("win.error"), t("win.stop_failed", error=data))
                 elif kind == "ai":
                     self.show_ai(*data)
                 elif kind == "log":
@@ -923,6 +1165,24 @@ class App:
                     self.add_translation(*data)
                 elif kind == "translation_info":
                     self.add_translation_info(data)
+                elif kind == "translation_progress":
+                    request_id, downloaded = data
+                    if request_id == self.translation_prepare_id:
+                        done_mb = max(0, int(downloaded / (1024 * 1024)))
+                        self.translation_progress.configure(value=min(done_mb, self.translation_expected_mb))
+                        self.translation_note.configure(
+                            text=t("win.translate_progress", done=done_mb, total=self.translation_expected_mb),
+                            foreground=GREY)
+                elif kind == "translation_prepared":
+                    request_id, error = data
+                    if request_id == self.translation_prepare_id:
+                        self.translation_loading = False
+                        self.translation_loading_pair = None
+                        self.set_translation_busy(False)
+                        self.translation_note.configure(
+                            text=t("win.translate_failed", error=error) if error else t("win.translate_ready"),
+                            foreground=RED if error else GREEN)
+                        self.refresh_start_button()
                 elif kind == "processed":
                     self.show_results(data)
         except queue.Empty:
@@ -934,8 +1194,9 @@ class App:
 
     def draw_meters(self) -> None:
         import math
-        for key, level in zip(("microphone", "computer"), self.levels):
-            canvas, bar, note, last_heard = self.meters[key]
+        levels = {"microphone": self.levels[0], "computer": self.levels[1]}
+        for key, (canvas, bar, note, last_heard) in self.meters.items():
+            level = levels[key]
             decibels = 20 * math.log10(level) if level > 1e-6 else -90
             fraction = min(1.0, max(0.0, (decibels + 60) / 60))
             width = int(canvas.cget("width"))
@@ -996,7 +1257,11 @@ def run(args) -> int:
     loaded = None
     while True:  # once more for every change of the interface language
         root = tk.Tk()
-        if os.name != "nt":
+        if sys.platform == "darwin":
+            families = set(tkfont.families(root))
+            FONT = next((name for name in ("SF Pro Text", "Helvetica Neue", "Helvetica")
+                         if name in families), "TkDefaultFont")
+        elif os.name != "nt":
             families = set(tkfont.families(root))
             FONT = next((name for name in LINUX_FONTS if name in families), "TkDefaultFont")
         app = App(root, args, loaded)
