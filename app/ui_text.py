@@ -162,9 +162,17 @@ TEXTS = {
                      "Lokale Aufnahme, Transkription und Übersetzung",
                      "Локальная запись, расшифровка и перевод"),
     "win.update_title": ("Update available", "Aktualisierung verfügbar", "Доступно обновление"),
-    "win.update_text": ("Live Transcription {version} is available. Open the download page?",
-                        "Live Transcription {version} ist verfügbar. Downloadseite öffnen?",
-                        "Доступна Live Transcription {version}. Открыть страницу загрузки?"),
+    "win.update_text": (
+        "Live Transcription {version} is available. Open the download page?\n\n"
+        "Important: this independent build is not notarized by Apple. After replacing the app, "
+        "macOS will require you to approve the new version again in System Settings → Privacy & Security.",
+        "Live Transcription {version} ist verfügbar. Downloadseite öffnen?\n\n"
+        "Wichtig: Diese unabhängige Version ist nicht von Apple notarisiert. Nach dem Ersetzen der App "
+        "müssen Sie die neue Version in Systemeinstellungen → Datenschutz & Sicherheit erneut erlauben.",
+        "Доступна Live Transcription {version}. Открыть страницу загрузки?\n\n"
+        "Важно: эта независимая сборка не нотарифицирована Apple. После замены приложения macOS "
+        "потребует снова разрешить новую версию в разделе «Системные настройки → "
+        "Конфиденциальность и безопасность»."),
     "win.update": ("Check for updates", "Aktualisieren", "Обновить"),
     "win.update_checking": ("Checking...", "Prüfe...", "Проверяю…"),
     "win.update_current": ("You have the latest version ({version}).",
