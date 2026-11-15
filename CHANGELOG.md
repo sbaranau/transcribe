@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.6 — 2026-11-15
+
+- Made the primary Start recording action reliably bright red on macOS Aqua.
+- Updated the project page and screenshots for the complete current macOS workflow.
+- Added a prominent direct installer download link for regular macOS users.
+
 ## v1.5 — 2026-11-15
 
 - Made Start recording larger and brighter as the primary action.

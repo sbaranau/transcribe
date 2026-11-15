@@ -283,14 +283,19 @@ class App:
             frame, text=t("win.tell_people"), background="#fff3c4", foreground="#5d4300",
             font=(FONT, 10), anchor="w", padx=10, pady=7).grid(
                 row=7, column=0, columnspan=2, sticky="ew", pady=(10, 4))
-        # The native macOS ttk button is deliberately subdued and ignores custom background
-        # colours. This is the primary action, so use a classic button with an explicit treatment.
-        self.start_button = tk.Button(
-            frame, text=t("win.start"), command=self.start, state="disabled",
-            font=(FONT, 16, "bold"), background="#e32636", foreground="white",
-            activebackground="#b71c2b", activeforeground="white",
-            disabledforeground="#777777",
-            relief="flat", borderwidth=0, padx=28, pady=13, cursor="hand2")
+        # Aqua ignores custom colours on both ttk.Button and tk.Button. A focusable label keeps
+        # the primary action truly red on macOS while remaining clickable and keyboard-accessible.
+        self.start_enabled = False
+        self.start_button = tk.Label(
+            frame, text=t("win.start"), font=(FONT, 16, "bold"), background="#d7d7d7",
+            foreground="#777777", padx=28, pady=13, cursor="arrow", takefocus=True)
+        self.start_button.bind("<Button-1>", lambda _event: self.start() if self.start_enabled else None)
+        self.start_button.bind("<Return>", lambda _event: self.start() if self.start_enabled else None)
+        self.start_button.bind("<space>", lambda _event: self.start() if self.start_enabled else None)
+        self.start_button.bind("<Enter>", lambda _event: self.start_button.configure(
+            background="#c51f30") if self.start_enabled else None)
+        self.start_button.bind("<Leave>", lambda _event: self.start_button.configure(
+            background="#e32636") if self.start_enabled else None)
         self.start_button.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(10, 2))
         return frame
 
@@ -378,10 +383,11 @@ class App:
 
     def refresh_start_button(self) -> None:
         enabled = self.model is not None and not self.translation_loading
+        self.start_enabled = enabled
         self.start_button.configure(
-            state="normal" if enabled else "disabled",
             background="#e32636" if enabled else "#d7d7d7",
-            foreground="white" if enabled else "#777777")
+            foreground="white" if enabled else "#777777",
+            cursor="hand2" if enabled else "arrow")
 
     @staticmethod
     def load_ui_settings() -> dict:

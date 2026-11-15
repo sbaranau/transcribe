@@ -4,8 +4,13 @@ Private, local meeting transcription for Windows, macOS and Linux. Recordings an
 become a readable transcript with speakers and timestamps, optionally translated, checked and
 summarized.
 
-**Current release: v1.5** — clearer recording controls and an active-recording app icon, plus
-consecutive recordings without restarting. See the [changelog](CHANGELOG.md).
+**Current release: v1.6** — a polished macOS interface with a prominent recording action,
+focused recording state and consecutive recordings without restarting. See the
+[changelog](CHANGELOG.md).
+
+**[Download the macOS installer (Apple Silicon)](https://github.com/sbaranau/transcribe/releases/download/v1.6/Live-Transcription-macOS-Apple-Silicon-v1.6.dmg)** ·
+[All releases](https://github.com/sbaranau/transcribe/releases/latest) ·
+[User guide in Russian](ИНСТРУКЦИЯ.md)
 
 ![The live window during a call: the transcript on the left, its German translation on the right](docs/screenshots/2-live.png)
 
@@ -29,6 +34,8 @@ consecutive recordings without restarting. See the [changelog](CHANGELOG.md).
 - **Interface in English, German and Russian.**
 - **Guided live interface** that clearly separates setup, model download, recording, finalization
   and result creation, with accessible progress and error states.
+- **Native macOS application** with a one-file installer, update checks, Help and About,
+  an active-recording Dock icon and a new recording action that needs no restart.
 
 **Privacy.** Transcription, speaker separation and translation run locally; no recording or text
 leaves the computer. Only the optional AI steps send the text to the AI you choose, under your
@@ -56,8 +63,8 @@ again.
 ### macOS
 
 For a regular installation, download
-**`Live-Transcription-macOS-Apple-Silicon-v1.5.dmg`** from
-[GitHub Releases](https://github.com/sbaranau/transcribe/releases/latest). Open that one file and
+**[Live-Transcription-macOS-Apple-Silicon-v1.6.dmg](https://github.com/sbaranau/transcribe/releases/download/v1.6/Live-Transcription-macOS-Apple-Silicon-v1.6.dmg)**.
+Open that one file and
 drag **Live Transcription** to **Applications**. On first start it downloads the speech models
 (about 1.7 GB) into Application Support. Models, translations and preferences remain there when
 the application is updated. The app quietly checks GitHub Releases and offers the download page
@@ -104,8 +111,8 @@ system dialog; less-used options stay under **Additional settings**. During reco
 shown separately from confirmed text and the translation column can be hidden temporarily.
 
 <p>
-<img src="docs/screenshots/1-before.png" alt="Before the call: meeting language, translation, microphone and computer sound" width="49%">
-<img src="docs/screenshots/3-after.png" alt="After the call: transcribe again, speakers, translation, AI check and summary" width="49%">
+<img src="docs/screenshots/1-before.png" alt="Before the call on macOS: language, translation and microphone selection with a prominent red Start recording button" width="49%">
+<img src="docs/screenshots/3-after.png" alt="After the call on macOS: start a new recording immediately or create the final transcript, translation and summary" width="49%">
 </p>
 
 The results of a recording go into a folder next to it:
