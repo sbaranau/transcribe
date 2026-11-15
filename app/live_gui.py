@@ -59,7 +59,9 @@ class App:
     def __init__(self, root: tk.Tk, args, loaded=None):
         """loaded: (model, hotwords) kept from the window this one replaces."""
         self.root, self.args = root, args
-        self.restart = None  # set to (model, hotwords) when the interface language changes
+        # False closes the application; True starts a fresh recording screen and reloads the
+        # model; (model, hotwords) rebuilds the window while keeping an already loaded model.
+        self.restart = False
         self.processing = None  # the child process of the full processing while it runs
         self.live_translator = None
         self.translation_prepare_id = 0
@@ -407,6 +409,13 @@ class App:
         self.restart = (self.model, self.hotwords)
         self.root.destroy()
 
+    def new_recording(self) -> None:
+        """Return to a clean recording screen without ending the application process."""
+        if self.processing:
+            return
+        self.restart = True
+        self.root.destroy()
+
     def build_meters(self) -> ttk.Frame:
         frame = ttk.Frame(self.root)
         self.meters = {}
@@ -564,7 +573,12 @@ class App:
         if entered_folder:
             self.base_folder = os.path.abspath(os.path.expanduser(entered_folder))
         self.save_ui_settings(self.chosen_settings())
-        folder = os.path.join(self.base_folder, time.strftime("%Y-%m-%d %H-%M"))
+        folder = os.path.join(self.base_folder, time.strftime("%Y-%m-%d %H-%M-%S"))
+        original_folder = folder
+        number = 2
+        while os.path.exists(folder):
+            folder = f"{original_folder} ({number})"
+            number += 1
         try:
             self.session = live.LiveSession(
                 self.model, folder, language, self.hotwords, microphone, speakers,
@@ -829,6 +843,9 @@ class App:
         footer = ttk.Frame(self.root)
         footer.pack(side="bottom", fill="x", padx=14, pady=(0, 12))
         ttk.Button(footer, text=t("win.close"), command=self.on_close).pack(side="right")
+        self.new_recording_button = ttk.Button(
+            footer, text=t("win.new_recording"), style="Big.TButton", command=self.new_recording)
+        self.new_recording_button.pack(side="right", padx=(0, 8))
         self.text_frame.pack(fill="both", expand=True, padx=14, pady=(0, 8))
         ttk.Label(frame, text=t("win.live_saved", path=self.session.txt_path), style="Note.TLabel",
                   wraplength=760).grid(row=0, column=0, columnspan=3, sticky="w")
@@ -1053,6 +1070,7 @@ class App:
     def lock_after(self, locked: bool) -> None:
         """While the processing runs, its settings cannot be changed and Run becomes Stop."""
         if locked:
+            self.new_recording_button.configure(state="disabled")
             for widget in (self.redo_box, self.split_box, self.count_box, self.check_box, self.summary_box,
                            self.translate_box, self.after_target, self.check_translation_box,
                            self.ai_choice, self.path_entry, self.try_button, self.delete_box):
@@ -1063,6 +1081,7 @@ class App:
             self.processing_panel.grid(row=16, column=0, columnspan=3, sticky="ew", pady=(12, 2))
             self.processing_progress.start(12)
         else:
+            self.new_recording_button.configure(state="normal")
             self.processing_progress.stop()
             self.processing_panel.grid_remove()
             self.cancel_button.pack_forget()
@@ -1305,6 +1324,6 @@ def run(args) -> int:
             FONT = next((name for name in LINUX_FONTS if name in families), "TkDefaultFont")
         app = App(root, args, loaded)
         root.mainloop()
-        if not app.restart:
+        if app.restart is False:
             return 0
-        loaded = app.restart
+        loaded = None if app.restart is True else app.restart

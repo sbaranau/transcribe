@@ -342,6 +342,7 @@ TEXTS = {
                                 "Dies kann einige Minuten dauern. Fertige Dateien erscheinen sofort.",
                                 "Это может занять несколько минут. Готовые файлы появятся сразу."),
     "win.close": ("Close", "Schließen", "Закрыть"),
+    "win.new_recording": ("New recording", "Neue Aufnahme", "Новая запись"),
     "win.no_ai": ("No AI ready to use (installed and logged in).",
                   "Keine KI einsatzbereit (installiert und angemeldet).",
                   "Нет ИИ, готового к работе (установленного и с выполненным входом)."),

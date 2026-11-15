@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.4 — 2026-11-15
+
+- Added a prominent New recording button after stopping and after result processing.
+- A new recording returns to the setup screen without restarting the application process.
+- New session folders include seconds and a collision-safe suffix, so consecutive recordings
+  can never overwrite one another.
+
 ## v1.3 — 2026-11-15
 
 - Added a single-file Apple Silicon DMG for people who do not need the source tree.
