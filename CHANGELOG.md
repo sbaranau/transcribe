@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.7 — 2026-11-15
+
+- Added a bilingual first-launch guide directly inside the macOS DMG.
+- Explained the independent open-source distribution and current lack of Apple notarization.
+- Documented the reliable Privacy & Security approval flow used by current macOS releases.
+
 ## v1.6 — 2026-11-15
 
 - Made the primary Start recording action reliably bright red on macOS Aqua.

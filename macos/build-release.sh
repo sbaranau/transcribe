@@ -60,6 +60,8 @@ STAGE="$BUILD/dmg"
 mkdir -p "$STAGE"
 /usr/bin/ditto "$APP" "$STAGE/Live Transcription.app"
 ln -s /Applications "$STAGE/Applications"
+/usr/bin/ditto "$MACOS/release/First Launch - Первый запуск.html" \
+    "$STAGE/First Launch - Первый запуск.html"
 rm -f "$DMG"
 /usr/bin/hdiutil create -volname "Live Transcription" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
 

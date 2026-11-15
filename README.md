@@ -4,11 +4,11 @@ Private, local meeting transcription for Windows, macOS and Linux. Recordings an
 become a readable transcript with speakers and timestamps, optionally translated, checked and
 summarized.
 
-**Current release: v1.6** — a polished macOS interface with a prominent recording action,
-focused recording state and consecutive recordings without restarting. See the
+**Current release: v1.7** — a polished macOS interface and a bilingual first-launch guide included
+directly in the installer. See the
 [changelog](CHANGELOG.md).
 
-**[Download the macOS installer (Apple Silicon)](https://github.com/sbaranau/transcribe/releases/download/v1.6/Live-Transcription-macOS-Apple-Silicon-v1.6.dmg)** ·
+**[Download the macOS installer (Apple Silicon)](https://github.com/sbaranau/transcribe/releases/download/v1.7/Live-Transcription-macOS-Apple-Silicon-v1.7.dmg)** ·
 [All releases](https://github.com/sbaranau/transcribe/releases/latest) ·
 [User guide in Russian](ИНСТРУКЦИЯ.md)
 
@@ -63,7 +63,7 @@ again.
 ### macOS
 
 For a regular installation, download
-**[Live-Transcription-macOS-Apple-Silicon-v1.6.dmg](https://github.com/sbaranau/transcribe/releases/download/v1.6/Live-Transcription-macOS-Apple-Silicon-v1.6.dmg)**.
+**[Live-Transcription-macOS-Apple-Silicon-v1.7.dmg](https://github.com/sbaranau/transcribe/releases/download/v1.7/Live-Transcription-macOS-Apple-Silicon-v1.7.dmg)**.
 Open that one file and
 drag **Live Transcription** to **Applications**. On first start it downloads the speech models
 (about 1.7 GB) into Application Support. Models, translations and preferences remain there when
@@ -72,10 +72,9 @@ only when a newer version exists.
 
 > **First launch on macOS.** This independent open-source build is not yet notarized by Apple,
 > so macOS may say that it cannot verify the app for malicious software. Do not disable
-> Gatekeeper. In Finder, open **Applications**, Control-click (or right-click)
-> **Live Transcription**, choose **Open**, then confirm **Open** once more. If that choice is not
-> shown, open **System Settings → Privacy & Security** and choose **Open Anyway** for Live
-> Transcription. After this one-time confirmation, the app opens normally. See
+> Gatekeeper. Try to open the copied app once, then open **System Settings → Privacy & Security**
+> and choose **Open Anyway** for Live Transcription. After this one-time confirmation, the app
+> opens normally. The DMG includes the same instructions in English and Russian. See
 > [Apple's instructions](https://support.apple.com/en-us/102445).
 
 Developers who want the source checkout can use the repository installation instead:
