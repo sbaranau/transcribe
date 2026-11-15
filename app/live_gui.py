@@ -79,6 +79,7 @@ class App:
         self.paragraph_start = self.last_end = self.last_label = None
         self.drafts = {}  # label -> unfinished phrase
         self.found_ai = {}
+        self.pending_update = None
         self.text_size = 13
         self.base_folder = os.path.join(live.documents_folder(), "Transcripts")
         if args.out_dir:
@@ -129,6 +130,18 @@ class App:
         messagebox.showinfo(t("win.about"), t(
             "win.about_text", version=updates.current_version(), folder=paths.DATA_DIR))
 
+    def show_update_result(self, version: str | None, manual: bool) -> None:
+        if manual:
+            self.update_button.configure(state="normal", text=t("win.update"))
+        if version and updates.is_newer(version):
+            if messagebox.askyesno(t("win.update_title"), t("win.update_text", version=version)):
+                webbrowser.open(updates.RELEASES_URL)
+        elif manual and version:
+            messagebox.showinfo(t("win.update_title"), t(
+                "win.update_current", version=updates.current_version()))
+        elif manual:
+            messagebox.showerror(t("win.update_title"), t("win.update_failed"))
+
     # --- layout -----------------------------------------------------------------------------------
 
     def build_header(self) -> None:
@@ -154,11 +167,11 @@ class App:
                                 font=(FONT, 11))
         self.status.pack(side="right", padx=16)
 
-        tools = ttk.Frame(self.root, padding=(14, 0, 14, 8))
-        tools.pack(fill="x")
-        ttk.Button(tools, text=t("win.about"), command=self.show_about).pack(side="right")
-        ttk.Button(tools, text=t("win.help"), command=self.show_help).pack(side="right", padx=6)
-        self.update_button = ttk.Button(tools, text=t("win.update"), command=self.manual_update)
+        self.tools_frame = ttk.Frame(self.root, padding=(14, 0, 14, 8))
+        self.tools_frame.pack(fill="x")
+        ttk.Button(self.tools_frame, text=t("win.about"), command=self.show_about).pack(side="right")
+        ttk.Button(self.tools_frame, text=t("win.help"), command=self.show_help).pack(side="right", padx=6)
+        self.update_button = ttk.Button(self.tools_frame, text=t("win.update"), command=self.manual_update)
         self.update_button.pack(side="right")
 
     def build_setup(self) -> ttk.Frame:
@@ -274,10 +287,10 @@ class App:
         # colours. This is the primary action, so use a classic button with an explicit treatment.
         self.start_button = tk.Button(
             frame, text=t("win.start"), command=self.start, state="disabled",
-            font=(FONT, 14, "bold"), background=RED, foreground="white",
-            activebackground="#a91f1f", activeforeground="white",
+            font=(FONT, 16, "bold"), background="#e32636", foreground="white",
+            activebackground="#b71c2b", activeforeground="white",
             disabledforeground="#777777",
-            relief="flat", borderwidth=0, padx=24, pady=10, cursor="hand2")
+            relief="flat", borderwidth=0, padx=28, pady=13, cursor="hand2")
         self.start_button.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(10, 2))
         return frame
 
@@ -367,7 +380,7 @@ class App:
         enabled = self.model is not None and not self.translation_loading
         self.start_button.configure(
             state="normal" if enabled else "disabled",
-            background=RED if enabled else "#d7d7d7",
+            background="#e32636" if enabled else "#d7d7d7",
             foreground="white" if enabled else "#777777")
 
     @staticmethod
@@ -592,6 +605,7 @@ class App:
             messagebox.showerror(t("win.start_failed"), str(error))
             return
         self.setup_frame.pack_forget()
+        self.tools_frame.pack_forget()
         self.interface_box.pack_forget()  # the interface language is chosen before the recording
         self.text_frame.pack_forget()
         self.meters_frame.pack(fill="x", padx=14, pady=(0, 6))
@@ -604,6 +618,7 @@ class App:
         self.text.mark_gravity("draft", "left")  # the draft is typed after it, the mark stays put
         self.text.configure(state="disabled")
         self.status.configure(text=t("win.recording"), foreground=RED)
+        set_icon(self.root, recording=True)
         self.folder = folder
         target, name = self.targets[self.translate_to.current()]
         if target:
@@ -838,7 +853,12 @@ class App:
 
         frame = ttk.LabelFrame(self.root, text=t("win.after"), padding=12)
         self.after_frame = frame
+        self.tools_frame.pack(fill="x")
         frame.pack(fill="x", padx=14, pady=(0, 8))
+        set_icon(self.root, recording=False)
+        if self.pending_update:
+            pending, self.pending_update = self.pending_update, None
+            self.root.after(100, lambda result=pending: self.show_update_result(*result))
         # Close at the bottom right of the window; packed before the text so it stays visible.
         footer = ttk.Frame(self.root)
         footer.pack(side="bottom", fill="x", padx=14, pady=(0, 12))
@@ -1233,16 +1253,10 @@ class App:
                     self.show_results(data)
                 elif kind == "update":
                     version, manual = data
-                    if manual:
-                        self.update_button.configure(state="normal", text=t("win.update"))
-                    if version and updates.is_newer(version):
-                        if messagebox.askyesno(t("win.update_title"), t("win.update_text", version=version)):
-                            webbrowser.open(updates.RELEASES_URL)
-                    elif manual and version:
-                        messagebox.showinfo(t("win.update_title"), t("win.update_current",
-                                                                    version=updates.current_version()))
-                    elif manual:
-                        messagebox.showerror(t("win.update_title"), t("win.update_failed"))
+                    if self.session and not self.session.stopping.is_set():
+                        self.pending_update = (version, manual)
+                    else:
+                        self.show_update_result(version, manual)
         except queue.Empty:
             pass
         if self.session and not self.session.stopping.is_set():
@@ -1291,13 +1305,14 @@ def stop_process_tree(process: subprocess.Popen) -> None:
         process.kill()
 
 
-def set_icon(root: tk.Tk) -> None:
-    """The red microphone of the live-transcribe shortcut, in the title bar and the taskbar."""
+def set_icon(root: tk.Tk, recording: bool = False) -> None:
+    """Change the Dock/taskbar icon so an active recording is visible outside the window."""
     try:
+        name = "live-recording" if recording else "live"
         if os.name == "nt":
-            root.iconbitmap(default=os.path.join(ICONS, "live.ico"))
+            root.iconbitmap(default=os.path.join(ICONS, name + ".ico"))
         else:
-            root.icon_image = tk.PhotoImage(file=os.path.join(ICONS, "live.png"))
+            root.icon_image = tk.PhotoImage(file=os.path.join(ICONS, name + ".png"))
             root.iconphoto(True, root.icon_image)
     except tk.TclError:
         pass  # no icon is no reason not to start

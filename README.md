@@ -4,8 +4,8 @@ Private, local meeting transcription for Windows, macOS and Linux. Recordings an
 become a readable transcript with speakers and timestamps, optionally translated, checked and
 summarized.
 
-**Current release: v1.4** — consecutive recordings without restarting the app, plus the single-file
-macOS download and update checks. See the [changelog](CHANGELOG.md).
+**Current release: v1.5** — clearer recording controls and an active-recording app icon, plus
+consecutive recordings without restarting. See the [changelog](CHANGELOG.md).
 
 ![The live window during a call: the transcript on the left, its German translation on the right](docs/screenshots/2-live.png)
 
@@ -56,7 +56,7 @@ again.
 ### macOS
 
 For a regular installation, download
-**`Live-Transcription-macOS-Apple-Silicon-v1.4.dmg`** from
+**`Live-Transcription-macOS-Apple-Silicon-v1.5.dmg`** from
 [GitHub Releases](https://github.com/sbaranau/transcribe/releases/latest). Open that one file and
 drag **Live Transcription** to **Applications**. On first start it downloads the speech models
 (about 1.7 GB) into Application Support. Models, translations and preferences remain there when

@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.5 — 2026-11-15
+
+- Made Start recording larger and brighter as the primary action.
+- Hid update, help and about controls while recording to keep the active screen focused.
+- Added a distinct dark microphone icon with a bright recording dot while recording is active;
+  the normal application icon returns after stopping.
+
 ## v1.4 — 2026-11-15
 
 - Added a prominent New recording button after stopping and after result processing.

@@ -83,6 +83,17 @@ def live_icon():
             (lambda x, y: rounded_rect(x, y, 0.36, 0.75, 0.64, 0.80, 0.025), WHITE)]
 
 
+def live_recording_icon():
+    """A clearly different Dock/taskbar icon while audio is actively being recorded."""
+    return [background("#263238"),
+            (lambda x, y: capsule(x, y, 0.5, 0.27, 0.5, 0.48, 0.11), WHITE),
+            (lambda x, y: (np.abs(np.hypot(x - 0.5, y - 0.47) - 0.19) <= 0.03) & (y >= 0.47), WHITE),
+            (lambda x, y: rounded_rect(x, y, 0.475, 0.64, 0.525, 0.77, 0.01), WHITE),
+            (lambda x, y: rounded_rect(x, y, 0.36, 0.75, 0.64, 0.80, 0.025), WHITE),
+            (lambda x, y: circle(x, y, 0.78, 0.22, 0.13), WHITE),
+            (lambda x, y: circle(x, y, 0.78, 0.22, 0.09), hex_colour("#ff1744"))]
+
+
 def setup_icon():
     def gear(x, y):
         r, angle = np.hypot(x - 0.5, y - 0.5), np.arctan2(y - 0.5, x - 0.5)
@@ -115,7 +126,8 @@ def ico(images: list[np.ndarray]) -> bytes:
 
 
 if __name__ == "__main__":
-    for name, layers in (("transcribe", transcript_icon()), ("live", live_icon()), ("setup", setup_icon())):
+    for name, layers in (("transcribe", transcript_icon()), ("live", live_icon()),
+                         ("live-recording", live_recording_icon()), ("setup", setup_icon())):
         images = [draw(size, layers) for size in SIZES]
         with open(os.path.join(HERE, name + ".ico"), "wb") as out:
             out.write(ico(images))
