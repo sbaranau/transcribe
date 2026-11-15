@@ -70,6 +70,14 @@ drag **Live Transcription** to **Applications**. On first start it downloads the
 the application is updated. The app quietly checks GitHub Releases and offers the download page
 only when a newer version exists.
 
+> **First launch on macOS.** This independent open-source build is not yet notarized by Apple,
+> so macOS may say that it cannot verify the app for malicious software. Do not disable
+> Gatekeeper. In Finder, open **Applications**, Control-click (or right-click)
+> **Live Transcription**, choose **Open**, then confirm **Open** once more. If that choice is not
+> shown, open **System Settings → Privacy & Security** and choose **Open Anyway** for Live
+> Transcription. After this one-time confirmation, the app opens normally. See
+> [Apple's instructions](https://support.apple.com/en-us/102445).
+
 Developers who want the source checkout can use the repository installation instead:
 
 ```bash
