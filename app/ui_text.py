@@ -14,9 +14,11 @@ language of the meeting, not this one.
 import configparser
 import os
 
+import paths
+
 LANGUAGES = {"en": "English", "de": "Deutsch", "ru": "Русский"}
 DEFAULT = "en"
-SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui.local.ini")
+SETTINGS_FILE = paths.config("ui.local.ini")
 
 _current = None
 
@@ -159,6 +161,30 @@ TEXTS = {
     "win.subtitle": ("Local recording, transcription and translation",
                      "Lokale Aufnahme, Transkription und Übersetzung",
                      "Локальная запись, расшифровка и перевод"),
+    "win.update_title": ("Update available", "Aktualisierung verfügbar", "Доступно обновление"),
+    "win.update_text": ("Live Transcription {version} is available. Open the download page?",
+                        "Live Transcription {version} ist verfügbar. Downloadseite öffnen?",
+                        "Доступна Live Transcription {version}. Открыть страницу загрузки?"),
+    "win.update": ("Check for updates", "Aktualisieren", "Обновить"),
+    "win.update_checking": ("Checking...", "Prüfe...", "Проверяю…"),
+    "win.update_current": ("You have the latest version ({version}).",
+                           "Sie haben die aktuelle Version ({version}).",
+                           "У вас последняя версия ({version})."),
+    "win.update_failed": ("Could not check for updates. Check the internet connection and try again.",
+                          "Die Aktualisierung konnte nicht geprüft werden. Prüfen Sie die Internetverbindung.",
+                          "Не удалось проверить обновления. Проверьте интернет и попробуйте ещё раз."),
+    "win.help": ("Help", "Hilfe", "Справка"),
+    "win.about": ("About", "Über", "О программе"),
+    "win.about_text": (
+        "Live Transcription {version}\n\nLocal recording, transcription and translation. "
+        "Audio and text stay on this Mac unless you explicitly select an external AI.\n\n"
+        "Models and settings: {folder}",
+        "Live Transcription {version}\n\nLokale Aufnahme, Transkription und Übersetzung. "
+        "Audio und Text bleiben auf diesem Mac, sofern Sie nicht ausdrücklich eine externe KI wählen.\n\n"
+        "Modelle und Einstellungen: {folder}",
+        "Live Transcription {version}\n\nЛокальная запись, расшифровка и перевод. "
+        "Аудио и текст остаются на этом Mac, если вы явно не выбрали внешний ИИ.\n\n"
+        "Модели и настройки: {folder}"),
     "win.loading": ("Loading the speech recognition model...", "Lade das Spracherkennungsmodell...",
                     "Загружаю модель распознавания..."),
     "win.before": (" Before you start ", " Vor dem Start ", " Перед началом "),

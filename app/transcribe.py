@@ -47,14 +47,16 @@ import screenshots
 import translation_checker
 import translator
 import ui_text
+import paths
 from ui_text import t
 
 TOOL_DIR = os.path.dirname(os.path.abspath(__file__))  # app\: code, prompts, models
 ROOT_DIR = os.path.dirname(TOOL_DIR)  # the folder people open: scripts, guides, terms.txt
-DEFAULT_MODEL = os.path.join(TOOL_DIR, "models", "large-v3-turbo")
+DEFAULT_MODEL = os.path.join(paths.MODELS_DIR, "large-v3-turbo")
 SUMMARY_PROMPT_FILE = os.path.join(TOOL_DIR, "summary_prompt.md")
 # Most specific first: when the list is too long, Whisper drops the terms at the end.
-DEFAULT_TERMS_FILES = [os.path.join(ROOT_DIR, "terms.txt")]
+DEFAULT_TERMS_FILES = list(dict.fromkeys([
+    os.path.join(paths.DATA_DIR, "terms.txt"), os.path.join(ROOT_DIR, "terms.txt")]))
 # faster-whisper keeps at most max_length // 2 - 1 = 223 hotword tokens and silently drops the rest.
 HOTWORDS_TOKEN_LIMIT = 223
 
@@ -88,7 +90,7 @@ MULTILINGUAL = "multi"
 
 # Voice separation (speaker diarization) with sherpa-onnx; models downloaded by the setup.
 SAMPLE_RATE = 16000
-DIARIZATION_DIR = os.path.join(TOOL_DIR, "models", "diarization")
+DIARIZATION_DIR = os.path.join(paths.MODELS_DIR, "diarization")
 SEGMENTATION_MODEL = os.path.join(DIARIZATION_DIR, "sherpa-onnx-pyannote-segmentation-3-0", "model.onnx")
 EMBEDDING_MODEL = os.path.join(DIARIZATION_DIR, "nemo_en_titanet_small.onnx")
 # Clustering distance when the number of speakers is unknown: higher merges more voices.

@@ -20,10 +20,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+import paths
 from ui_text import t
 
 TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
-SETTINGS_FILE = os.path.join(TOOL_DIR, "ai.local.ini")
+SETTINGS_FILE = paths.config("ai.local.ini")
 NOTES_PROMPT_FILE = os.path.join(TOOL_DIR, "summary_notes_prompt.md")
 ENGINES = ["claude", "codex", "local"]
 TITLES = {"claude": "Claude (Claude Code)", "codex": "ChatGPT (Codex CLI)"}

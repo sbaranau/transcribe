@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+HERE="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INFO_PLIST="$HERE/../Info.plist"
+CONFIGURED_ROOT="$(/usr/libexec/PlistBuddy -c 'Print :TranscribeProjectRoot' "$INFO_PLIST" 2>/dev/null || true)"
+if [ -n "$CONFIGURED_ROOT" ]; then
+    ROOT="$(cd "$CONFIGURED_ROOT" && pwd)"
+else
+    ROOT="$(cd "$HERE/../../../.." && pwd)"
+fi
+PY="$ROOT/app/venv/bin/python"
+SETUP="$ROOT/macos/setup.command"
+LOG_DIR="$HOME/Library/Logs"
+LOG="$LOG_DIR/Live Transcription.log"
+
+if [ ! -x "$PY" ]; then
+    /usr/bin/osascript - "$SETUP" <<'APPLESCRIPT'
+on run argv
+    set setupFile to item 1 of argv
+    display alert "Live Transcription is not installed yet" message "Run the setup first. It downloads the speech model and prepares the application." as warning buttons {"Cancel", "Open Setup"} default button "Open Setup"
+    if button returned of result is "Open Setup" then
+        tell application "Finder" to open POSIX file setupFile
+    end if
+end run
+APPLESCRIPT
+    exit 1
+fi
+
+mkdir -p "$LOG_DIR"
+export PYTHONIOENCODING=utf-8
+export PYTHONUTF8=1
+export HF_HUB_DISABLE_SYMLINKS_WARNING=1
+exec "$PY" "$ROOT/app/transcribe.py" --live --cpu >>"$LOG" 2>&1

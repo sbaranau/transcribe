@@ -4,8 +4,8 @@ Private, local meeting transcription for Windows, macOS and Linux. Recordings an
 become a readable transcript with speakers and timestamps, optionally translated, checked and
 summarized.
 
-**Current release: v1.2** — macOS support and a redesigned live interface with clearer setup,
-download progress, recording states and result creation. See the [changelog](CHANGELOG.md).
+**Current release: v1.3** — a single-file macOS download, first-run model installation and update
+checks, in addition to the source distribution. See the [changelog](CHANGELOG.md).
 
 ![The live window during a call: the transcript on the left, its German translation on the right](docs/screenshots/2-live.png)
 
@@ -55,7 +55,15 @@ again.
 
 ### macOS
 
-Clone the repository, then double-click `macos/setup.command`:
+For a regular installation, download
+**`Live-Transcription-macOS-Apple-Silicon-v1.3.dmg`** from
+[GitHub Releases](https://github.com/sbaranau/transcribe/releases/latest). Open that one file and
+drag **Live Transcription** to **Applications**. On first start it downloads the speech models
+(about 1.7 GB) into Application Support. Models, translations and preferences remain there when
+the application is updated. The app quietly checks GitHub Releases and offers the download page
+only when a newer version exists.
+
+Developers who want the source checkout can use the repository installation instead:
 
 ```bash
 git clone https://github.com/sbaranau/transcribe.git
@@ -63,11 +71,16 @@ cd transcribe
 open macos/setup.command
 ```
 
-After setup, use `Transcribe recording.command` or `Live transcription.command` in `macos/`.
+After source setup, open **Live Transcription** from Applications or Spotlight.
+`Transcribe recording.command` in `macos/` remains available for existing recordings.
 Recognition runs locally on the CPU. Translation models are downloaded with visible progress when
 a language pair is first selected. Live mode records a microphone; system audio requires a virtual
 CoreAudio loopback device, which can be selected as a microphone. macOS asks for microphone access
 on first use.
+
+To remove the packaged app, move it from Applications to Trash. To remove its downloaded models
+and settings too, delete `~/Library/Application Support/Live Transcription`. Transcripts in
+Documents are never removed automatically.
 
 ### Linux
 

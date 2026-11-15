@@ -22,9 +22,10 @@ import unicodedata
 import urllib.parse
 
 import numpy as np
+import paths
 
 TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_DIR = os.path.join(TOOL_DIR, "models", "translation")
+MODEL_DIR = os.path.join(paths.MODELS_DIR, "translation")
 LANGUAGES = ("en", "de", "ru")
 # Direction -> (repository, pinned revision).
 MODELS = {

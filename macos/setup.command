@@ -47,4 +47,23 @@ uv pip install --python "$APP/venv/bin/python" --only-binary ':all:' -r "$APP/re
 echo "[3/3] Speech models (about 1.7 GB)"
 "$APP/venv/bin/python" "$APP/download_models.py"
 chmod +x "$MACOS/.internal"/*.sh "$MACOS"/*.command
-echo "Setup complete. Use the .command launchers in $MACOS."
+chmod +x "$MACOS/Live Transcription.app/Contents/MacOS/live-transcription"
+
+USER_APPLICATIONS="$HOME/Applications"
+APP_LINK="$USER_APPLICATIONS/Live Transcription.app"
+mkdir -p "$USER_APPLICATIONS"
+if [ -L "$APP_LINK" ]; then
+    rm "$APP_LINK"
+fi
+if [ -e "$APP_LINK" ] && [ "$(/usr/bin/defaults read "$APP_LINK/Contents/Info" CFBundleIdentifier 2>/dev/null || true)" != "com.sbaranau.transcribe.live" ]; then
+    echo "Could not add the app to $USER_APPLICATIONS because an item with the same name already exists."
+    echo "You can still open it from $MACOS."
+else
+    /usr/bin/ditto "$MACOS/Live Transcription.app" "$APP_LINK"
+    /usr/libexec/PlistBuddy -c "Delete :TranscribeProjectRoot" "$APP_LINK/Contents/Info.plist" 2>/dev/null || true
+    /usr/libexec/PlistBuddy -c "Add :TranscribeProjectRoot string $ROOT" "$APP_LINK/Contents/Info.plist"
+    /usr/bin/codesign --force --deep --sign - "$APP_LINK"
+    /usr/bin/touch "$APP_LINK"
+fi
+
+echo "Setup complete. Open Live Transcription from Applications, Spotlight or $MACOS."

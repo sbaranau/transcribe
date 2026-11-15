@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.3 — 2026-11-15
+
+- Added a single-file Apple Silicon DMG for people who do not need the source tree.
+- Added a first-run application window that downloads speech models into Application Support.
+- Kept models and settings outside the app so updates do not download them again.
+- Added a quiet GitHub Releases update check with a prompt when a newer version is available.
+- Added visible Check for updates, Help and About buttons to the live window.
+- Added an ARM64 GitHub Actions release build that attaches the DMG to version tags.
+- Kept the repository-based installation as a separate developer/source distribution.
+
 ## v1.2 — 2026-11-14
 
 - Added a native macOS installation and launch workflow.

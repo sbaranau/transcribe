@@ -25,21 +25,24 @@ import sys
 import threading
 import time
 import tkinter as tk
+import webbrowser
 from tkinter import filedialog, font as tkfont, messagebox, ttk
 
 import ai_engines
 import live
+import paths
 import screenshots
 import transcribe as tool
 import translator
 import ui_text
+import updates
 from ui_text import t
 
 # Stored in ui.local.ini for "do not record the microphone", whatever the interface language.
 NO_MICROPHONE = "<none>"
 OLD_NO_MICROPHONE = "Не записывать микрофон"  # what versions before 2026-11-13 stored
 # The language and microphone chosen last time are offered again (local, not in git).
-UI_SETTINGS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui.local.ini")
+UI_SETTINGS = paths.config("ui.local.ini")
 PARAGRAPH_PAUSE = 2.0
 PARAGRAPH_LONGEST = 30.0
 GREY, RED, GREEN = "#6b6b6b", "#c62828", "#2e7d32"
@@ -105,7 +108,24 @@ class App:
             self.events.put(("model", (*loaded, "")))
         else:
             threading.Thread(target=self.load_model, daemon=True).start()
+        if os.environ.get("TRANSCRIBE_CHECK_UPDATES") == "1":
+            threading.Thread(target=self.check_update, args=(False,), daemon=True).start()
         root.after(100, self.poll)
+
+    def check_update(self, manual: bool) -> None:
+        version = updates.latest_release()
+        self.events.put(("update", (version, manual)))
+
+    def manual_update(self) -> None:
+        self.update_button.configure(state="disabled", text=t("win.update_checking"))
+        threading.Thread(target=self.check_update, args=(True,), daemon=True).start()
+
+    def show_help(self) -> None:
+        webbrowser.open("https://github.com/sbaranau/transcribe/blob/main/%D0%98%D0%9D%D0%A1%D0%A2%D0%A0%D0%A3%D0%9A%D0%A6%D0%98%D0%AF.md")
+
+    def show_about(self) -> None:
+        messagebox.showinfo(t("win.about"), t(
+            "win.about_text", version=updates.current_version(), folder=paths.DATA_DIR))
 
     # --- layout -----------------------------------------------------------------------------------
 
@@ -131,6 +151,13 @@ class App:
         self.status = ttk.Label(bar, text=t("win.loading"), foreground=GREY,
                                 font=(FONT, 11))
         self.status.pack(side="right", padx=16)
+
+        tools = ttk.Frame(self.root, padding=(14, 0, 14, 8))
+        tools.pack(fill="x")
+        ttk.Button(tools, text=t("win.about"), command=self.show_about).pack(side="right")
+        ttk.Button(tools, text=t("win.help"), command=self.show_help).pack(side="right", padx=6)
+        self.update_button = ttk.Button(tools, text=t("win.update"), command=self.manual_update)
+        self.update_button.pack(side="right")
 
     def build_setup(self) -> ttk.Frame:
         frame = ttk.LabelFrame(self.root, text=t("win.before"), padding=12)
@@ -1185,6 +1212,18 @@ class App:
                         self.refresh_start_button()
                 elif kind == "processed":
                     self.show_results(data)
+                elif kind == "update":
+                    version, manual = data
+                    if manual:
+                        self.update_button.configure(state="normal", text=t("win.update"))
+                    if version and updates.is_newer(version):
+                        if messagebox.askyesno(t("win.update_title"), t("win.update_text", version=version)):
+                            webbrowser.open(updates.RELEASES_URL)
+                    elif manual and version:
+                        messagebox.showinfo(t("win.update_title"), t("win.update_current",
+                                                                    version=updates.current_version()))
+                    elif manual:
+                        messagebox.showerror(t("win.update_title"), t("win.update_failed"))
         except queue.Empty:
             pass
         if self.session and not self.session.stopping.is_set():

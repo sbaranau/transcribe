@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+HERE="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RESOURCES="$(cd "$HERE/../Resources" && pwd)"
+DATA="$HOME/Library/Application Support/Live Transcription"
+LOG_DIR="$HOME/Library/Logs"
+LOG="$LOG_DIR/Live Transcription.log"
+PY="$RESOURCES/venv/bin/python"
+
+mkdir -p "$DATA" "$LOG_DIR"
+export TRANSCRIBE_DATA_DIR="$DATA"
+export TRANSCRIBE_CONFIG_DIR="$DATA"
+export TRANSCRIBE_VERSION_FILE="$RESOURCES/VERSION"
+export TRANSCRIBE_CHECK_UPDATES=1
+export HF_HOME="$DATA/huggingface"
+export HF_HUB_DISABLE_SYMLINKS_WARNING=1
+export PYTHONIOENCODING=utf-8
+export PYTHONUTF8=1
+
+exec "$PY" "$RESOURCES/app/bootstrap.py" --live --cpu >>"$LOG" 2>&1

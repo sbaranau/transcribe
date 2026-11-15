@@ -12,8 +12,10 @@ import sys
 import tarfile
 import urllib.request
 
+import paths
+
 TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
-MODELS_DIR = os.path.join(TOOL_DIR, "models")
+MODELS_DIR = paths.MODELS_DIR
 WHISPER_REPO = "mobiuslabsgmbh/faster-whisper-large-v3-turbo"
 WHISPER_DIR = os.path.join(MODELS_DIR, "large-v3-turbo")
 DIARIZATION_DIR = os.path.join(MODELS_DIR, "diarization")
