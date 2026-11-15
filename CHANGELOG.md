@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.9 — 2026-11-15
+
+- Kept Open, New recording and Close actions visible when the window is made smaller.
+- Reserved a persistent results footer and set a practical minimum window size.
+
 ## v1.8 — 2026-11-15
 
 - Renamed the Russian processing action to the clearer "Выполнить расшифровку".

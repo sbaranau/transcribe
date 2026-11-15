@@ -88,7 +88,7 @@ class App:
         root.title(t("win.title"))
         set_icon(root)
         root.geometry("900x760")
-        root.minsize(640, 520)
+        root.minsize(720, 520)
         root.protocol("WM_DELETE_WINDOW", self.on_close)
         style = ttk.Style()
         style.configure("Big.TButton", font=(FONT, 11, "bold"), padding=(14, 6))
@@ -860,18 +860,24 @@ class App:
         frame = ttk.LabelFrame(self.root, text=t("win.after"), padding=12)
         self.after_frame = frame
         self.tools_frame.pack(fill="x")
-        frame.pack(fill="x", padx=14, pady=(0, 8))
         set_icon(self.root, recording=False)
         if self.pending_update:
             pending, self.pending_update = self.pending_update, None
             self.root.after(100, lambda result=pending: self.show_update_result(*result))
-        # Close at the bottom right of the window; packed before the text so it stays visible.
+        # Pack the footer before the large settings frame. Tk allocates packed widgets in packing
+        # order, so primary actions remain visible even at the minimum window height.
         footer = ttk.Frame(self.root)
         footer.pack(side="bottom", fill="x", padx=14, pady=(0, 12))
         ttk.Button(footer, text=t("win.close"), command=self.on_close).pack(side="right")
         self.new_recording_button = ttk.Button(
             footer, text=t("win.new_recording"), style="Big.TButton", command=self.new_recording)
         self.new_recording_button.pack(side="right", padx=(0, 8))
+        self.footer_results = ttk.Frame(footer)
+        self.footer_results.pack(side="left", fill="both", expand=True)
+        self.results_heading = ttk.Label(
+            self.footer_results, text=t("win.ready_results"), style="Note.TLabel")
+        self.result_buttons = ttk.Frame(self.footer_results)
+        frame.pack(fill="x", padx=14, pady=(0, 8))
         self.text_frame.pack(fill="both", expand=True, padx=14, pady=(0, 8))
         ttk.Label(frame, text=t("win.live_saved", path=self.session.txt_path), style="Note.TLabel",
                   wraplength=760).grid(row=0, column=0, columnspan=3, sticky="w")
@@ -965,8 +971,6 @@ class App:
         # The texts with screenshots (Markdown) as HTML with the pictures inside, for any browser.
         self.export_button = ttk.Button(buttons, text=t("win.export_html"), command=self.export_html)
         self.export_button.pack(side="left", padx=(6, 0))
-        self.results_heading = ttk.Label(frame, text=t("win.ready_results"), style="Note.TLabel")
-        self.result_buttons = ttk.Frame(frame)
         ttk.Label(frame, text=t("win.processing_estimate"), style="Note.TLabel", wraplength=760).grid(
             row=15, column=0, columnspan=3, sticky="w", pady=(6, 0))
         self.processing_panel = ttk.Frame(frame)
@@ -1187,10 +1191,10 @@ class App:
             path = os.path.join(folder, name)
             label = t("win.open", what=t(key))
             if os.path.exists(path) and not any(b.cget("text") == label for b in self.result_buttons.winfo_children()):
-                self.results_heading.grid(row=17, column=0, columnspan=3, sticky="w", pady=(14, 3))
-                self.result_buttons.grid(row=18, column=0, columnspan=3, sticky="w")
+                self.results_heading.pack(anchor="w", pady=(0, 3))
+                self.result_buttons.pack(anchor="w")
                 ttk.Button(self.result_buttons, text=label,
-                           command=lambda p=path: tool.open_path(p)).pack(anchor="w", pady=2)
+                           command=lambda p=path: tool.open_path(p)).pack(side="left", padx=(0, 6))
 
     # --- events -----------------------------------------------------------------------------------
 

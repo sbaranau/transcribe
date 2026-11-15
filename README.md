@@ -4,11 +4,11 @@ Private, local meeting transcription for Windows, macOS and Linux. Recordings an
 become a readable transcript with speakers and timestamps, optionally translated, checked and
 summarized.
 
-**Current release: v1.8** — clearer, high-contrast primary actions on macOS and a bilingual
-first-launch guide included directly in the installer. See the
+**Current release: v1.9** — persistent result actions, clearer primary controls on macOS and a
+bilingual first-launch guide included directly in the installer. See the
 [changelog](CHANGELOG.md).
 
-**[Download the macOS installer (Apple Silicon)](https://github.com/sbaranau/transcribe/releases/download/v1.8/Live-Transcription-macOS-Apple-Silicon-v1.8.dmg)** ·
+**[Download the macOS installer (Apple Silicon)](https://github.com/sbaranau/transcribe/releases/download/v1.9/Live-Transcription-macOS-Apple-Silicon-v1.9.dmg)** ·
 [All releases](https://github.com/sbaranau/transcribe/releases/latest) ·
 [User guide in Russian](ИНСТРУКЦИЯ.md)
 
@@ -63,7 +63,7 @@ again.
 ### macOS
 
 For a regular installation, download
-**[Live-Transcription-macOS-Apple-Silicon-v1.8.dmg](https://github.com/sbaranau/transcribe/releases/download/v1.8/Live-Transcription-macOS-Apple-Silicon-v1.8.dmg)**.
+**[Live-Transcription-macOS-Apple-Silicon-v1.9.dmg](https://github.com/sbaranau/transcribe/releases/download/v1.9/Live-Transcription-macOS-Apple-Silicon-v1.9.dmg)**.
 Open that one file and
 drag **Live Transcription** to **Applications**. On first start it downloads the speech models
 (about 1.7 GB) into Application Support. Models, translations and preferences remain there when
