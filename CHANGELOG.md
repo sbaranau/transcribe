@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.21 — 2026-11-15
+
+- Added a clear update-dialog warning that each non-notarized macOS build must be approved again
+  in Privacy & Security after installation.
+- Includes the persistent result actions and high-contrast processing controls from the latest UI.
+
 ## v1.9 — 2026-11-15
 
 - Kept Open, New recording and Close actions visible when the window is made smaller.
