@@ -1,0 +1,39 @@
+name: Windows release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  installer:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --no-progress -y
+      - name: Build x64 installer
+        shell: powershell
+        run: ./windows/build-release.ps1
+      - name: Keep a downloadable workflow artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: Live-Transcription-Windows-x64
+          path: dist/*-Setup.exe
+      - name: Add installer to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/*-Setup.exe --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/*-Setup.exe --generate-notes --title "$GITHUB_REF_NAME"
+          fi

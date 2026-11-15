@@ -4,11 +4,12 @@ Private, local meeting transcription for Windows, macOS and Linux. Recordings an
 become a readable transcript with speakers and timestamps, optionally translated, checked and
 summarized.
 
-**Current release: v1.21** — persistent result actions, clearer primary controls and an explicit
-macOS update-approval warning. A bilingual first-launch guide is included in the installer. See the
+**Current release: v1.22** — single-file installers for Windows and macOS, while the full source
+remains available for developers. See the
 [changelog](CHANGELOG.md).
 
-**[Download the macOS installer (Apple Silicon)](https://github.com/sbaranau/transcribe/releases/download/v1.21/Live-Transcription-macOS-Apple-Silicon-v1.21.dmg)** ·
+**[Download for Windows](https://github.com/sbaranau/transcribe/releases/download/v1.22/Live-Transcription-Windows-x64-v1.22-Setup.exe)** ·
+**[Download for macOS (Apple Silicon)](https://github.com/sbaranau/transcribe/releases/download/v1.22/Live-Transcription-macOS-Apple-Silicon-v1.22.dmg)** ·
 [All releases](https://github.com/sbaranau/transcribe/releases/latest) ·
 [User guide in Russian](ИНСТРУКЦИЯ.md)
 
@@ -46,9 +47,20 @@ work under allow. Tell the participants that a meeting is transcribed.
 
 ### Windows 10/11
 
-Needs `git` (`winget install --id Git.Git`), about 4 GB of disk (plus about 0.45 GB per
-translation direction, downloaded when first used) and an internet connection during the setup. An NVIDIA GPU is recommended; without one, everything runs on the CPU, several times
-slower.
+For a regular installation, download the single
+**[Live-Transcription-Windows-x64-v1.22-Setup.exe](https://github.com/sbaranau/transcribe/releases/download/v1.22/Live-Transcription-Windows-x64-v1.22-Setup.exe)**
+file and run it. It installs only for the current user, needs no administrator rights, and adds
+**Live Transcription** and **Transcribe a recording** to the Start menu. On first start it downloads
+the speech models (about 1.7 GB) into `%LOCALAPPDATA%\Live Transcription`; models and preferences
+remain there when the application is updated. The installer optionally creates a desktop shortcut
+and an Explorer **Send to** entry.
+
+The installer is currently not code-signed. If Microsoft Defender SmartScreen appears, verify that
+the file was downloaded from this repository, choose **More info**, then **Run anyway**. This warning
+is separate from antivirus detection; do not disable Microsoft Defender.
+
+Developers who want the source checkout need `git` (`winget install --id Git.Git`) and can use the
+repository installation:
 
 ```
 git clone https://github.com/sbaranau/transcribe.git C:\bin\transcribe
@@ -60,10 +72,14 @@ the packages and the models into `app\`; nothing else on the computer is changed
 makes three shortcuts with icons in the tool folder. Update with `git pull` and run the setup
 again.
 
+The packaged application can be removed from **Settings → Apps → Installed apps**. Its downloaded
+models and preferences are intentionally kept for later installations; remove
+`%LOCALAPPDATA%\Live Transcription` separately if they are no longer needed.
+
 ### macOS
 
 For a regular installation, download
-**[Live-Transcription-macOS-Apple-Silicon-v1.21.dmg](https://github.com/sbaranau/transcribe/releases/download/v1.21/Live-Transcription-macOS-Apple-Silicon-v1.21.dmg)**.
+**[Live-Transcription-macOS-Apple-Silicon-v1.22.dmg](https://github.com/sbaranau/transcribe/releases/download/v1.22/Live-Transcription-macOS-Apple-Silicon-v1.22.dmg)**.
 Open that one file and
 drag **Live Transcription** to **Applications**. On first start it downloads the speech models
 (about 1.7 GB) into Application Support. Models, translations and preferences remain there when

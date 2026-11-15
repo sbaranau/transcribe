@@ -1,4 +1,4 @@
-"""First-run model installer for the packaged macOS application."""
+"""First-run model installer for packaged desktop applications."""
 import os
 import queue
 import subprocess
@@ -26,7 +26,7 @@ def install_models() -> bool:
     ttk.Label(root, text="Preparing Live Transcription", font=("TkDefaultFont", 17, "bold")) \
         .pack(anchor="w", padx=24, pady=(22, 6))
     ttk.Label(root, text=("The speech models are downloaded once (about 1.7 GB). "
-                          "Keep this window open. Your recordings never leave this Mac."),
+                          "Keep this window open. Your recordings never leave this computer."),
               wraplength=570, justify="left").pack(anchor="w", padx=24, pady=(0, 14))
     progress = ttk.Progressbar(root, mode="indeterminate")
     progress.pack(fill="x", padx=24, pady=(0, 14))

@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.22 — 2026-11-15
+
+- Added a single-file per-user Windows installer built and published by GitHub Actions.
+- Bundled an isolated Windows Python environment while keeping speech models and preferences in
+  LocalAppData so updates do not download them again.
+- Added Start menu shortcuts, optional desktop and Explorer Send to entries, and standard Windows
+  uninstall support.
+- Kept the repository setup as a separate source/developer installation.
+- Limited the repeated security-approval update warning to macOS; Windows receives its own
+  SmartScreen guidance in the documentation.
+
 ## v1.21 — 2026-11-15
 
 - Added a clear update-dialog warning that each non-notarized macOS build must be approved again

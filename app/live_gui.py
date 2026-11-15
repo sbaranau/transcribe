@@ -134,7 +134,8 @@ class App:
         if manual:
             self.update_button.configure(state="normal", text=t("win.update"))
         if version and updates.is_newer(version):
-            if messagebox.askyesno(t("win.update_title"), t("win.update_text", version=version)):
+            update_key = "win.update_text_macos" if sys.platform == "darwin" else "win.update_text"
+            if messagebox.askyesno(t("win.update_title"), t(update_key, version=version)):
                 webbrowser.open(updates.RELEASES_URL)
         elif manual and version:
             messagebox.showinfo(t("win.update_title"), t(
