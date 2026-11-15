@@ -945,11 +945,17 @@ class App:
         self.delete_box.grid(row=13, column=0, columnspan=3, sticky="w", pady=(8, 2))
         buttons = ttk.Frame(frame)
         buttons.grid(row=14, column=0, columnspan=3, sticky="w", pady=(10, 0))
-        self.run_button = tk.Button(
-            buttons, text=t("win.run"), command=self.run_processing,
-            font=(FONT, 12, "bold"), background=GREEN, foreground="white",
-            activebackground="#245c2a", activeforeground="white", disabledforeground="#777777",
-            relief="flat", borderwidth=0, padx=20, pady=8, cursor="hand2")
+        # Aqua ignores custom colours on tk.Button, making this primary action look like a faint
+        # secondary control. A focusable label preserves the intended contrast on macOS.
+        self.run_button = tk.Label(
+            buttons, text=t("win.run"), font=(FONT, 13, "bold"),
+            background="#168447", foreground="white", padx=24, pady=10,
+            cursor="hand2", takefocus=True)
+        self.run_button.bind("<Button-1>", lambda _event: self.run_processing())
+        self.run_button.bind("<Return>", lambda _event: self.run_processing())
+        self.run_button.bind("<space>", lambda _event: self.run_processing())
+        self.run_button.bind("<Enter>", lambda _event: self.run_button.configure(background="#106a38"))
+        self.run_button.bind("<Leave>", lambda _event: self.run_button.configure(background="#168447"))
         self.run_button.pack(side="left")
         # Takes the place of Run while the processing runs.
         self.cancel_button = ttk.Button(buttons, text=t("win.cancel"), style="Big.TButton",

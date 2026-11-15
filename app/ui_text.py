@@ -337,7 +337,7 @@ TEXTS = {
     "win.delete_sound": ("Delete the meeting sound (meeting.wav) after processing",
                          "Ton der Besprechung (meeting.wav) nach der Verarbeitung löschen",
                          "Удалить звук встречи (meeting.wav) после обработки"),
-    "win.run": ("Create results", "Ergebnisse erstellen", "Создать результаты"),
+    "win.run": ("Create results", "Ergebnisse erstellen", "Выполнить расшифровку"),
     "win.processing_estimate": ("This may take several minutes. Finished files appear as they are ready.",
                                 "Dies kann einige Minuten dauern. Fertige Dateien erscheinen sofort.",
                                 "Это может занять несколько минут. Готовые файлы появятся сразу."),

@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.8 — 2026-11-15
+
+- Renamed the Russian processing action to the clearer "Выполнить расшифровку".
+- Made the processing action reliably prominent and high-contrast on macOS Aqua.
+
 ## v1.7 — 2026-11-15
 
 - Added a bilingual first-launch guide directly inside the macOS DMG.
