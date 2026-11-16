@@ -31,7 +31,6 @@ are passed to Whisper as hotwords for every 30-second window.
 """
 import argparse
 import bisect
-import glob
 import os
 import re
 import sys
@@ -138,12 +137,13 @@ SETUP_HINT = (r"windows\setup.cmd" if os.name == "nt" else
 
 
 def add_cuda_dll_dirs() -> None:
-    """Make the pip-installed NVIDIA DLLs (cuBLAS, cuDNN) visible on Windows. On Linux,
+    """Make the NVIDIA DLLs (cuBLAS, cuDNN) visible on Windows: pip-installed in a checkout,
+    downloaded on first start in the packaged application (cuda_runtime.py). On Linux,
     linux/transcribe.sh puts their lib folders on LD_LIBRARY_PATH before Python starts."""
     if os.name != "nt":
         return
-    nvidia_dir = os.path.join(sys.prefix, "Lib", "site-packages", "nvidia")
-    for bin_dir in glob.glob(os.path.join(nvidia_dir, "*", "bin")):
+    import cuda_runtime
+    for bin_dir in cuda_runtime.dll_dirs():
         os.add_dll_directory(bin_dir)
         os.environ["PATH"] = bin_dir + os.pathsep + os.environ.get("PATH", "")
 

@@ -28,8 +28,23 @@ $Runtime = Join-Path $Payload "runtime"
 Move-Item $Python.Directory.FullName $Runtime
 $Python = Join-Path $Runtime "python.exe"
 
+# The NVIDIA CUDA wheels (about 1.3 GB) are not bundled: app\cuda_runtime.py downloads them on
+# first start, only on computers with an NVIDIA driver. Its pinned files must match these pins.
+$Requirements = Get-Content (Join-Path $Root "app\requirements.txt")
+$CudaRuntime = Get-Content (Join-Path $Root "app\cuda_runtime.py") -Raw
+foreach ($line in $Requirements | Where-Object { $_ -match '^nvidia-' }) {
+    $pin = ($line -split ';')[0].Trim() -replace '==', '-' -replace '-cu12-', '_cu12-'
+    $wheel = ($pin -replace '^nvidia-', 'nvidia_') -replace '-(?=[a-z])', '_'
+    if (-not $CudaRuntime.Contains("$wheel-py3-none-win_amd64.whl")) {
+        throw "app\cuda_runtime.py does not download $line"
+    }
+}
+$BundledRequirements = Join-Path $Build "requirements-bundled.txt"
+$Requirements | Where-Object { $_ -notmatch '^nvidia-' } | Set-Content -Encoding utf8 $BundledRequirements
+
 $Packages = Join-Path $Payload "packages"
-uv pip install --target $Packages --only-binary :all: -r (Join-Path $Root "app\requirements.txt")
+uv pip install --target $Packages --only-binary :all: -r $BundledRequirements
+if (Test-Path (Join-Path $Packages "nvidia")) { throw "NVIDIA CUDA wheels were bundled" }
 $OldPythonPath = $env:PYTHONPATH
 $env:PYTHONPATH = $Packages
 & $Python -c "import tkinter, faster_whisper, sherpa_onnx, soundcard, onnxruntime, tokenizers"

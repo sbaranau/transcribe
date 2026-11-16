@@ -1,4 +1,5 @@
-"""First-run model installer for packaged desktop applications."""
+"""First-run installer for packaged desktop applications: speech models and, on Windows
+computers with an NVIDIA graphics card, the CUDA libraries (cuda_runtime.py)."""
 import os
 import queue
 import subprocess
@@ -7,6 +8,7 @@ import threading
 import tkinter as tk
 from tkinter import ttk
 
+import cuda_runtime
 import paths
 
 
@@ -18,14 +20,21 @@ def models_ready() -> bool:
     ))
 
 
-def install_models() -> bool:
+def first_setup(need_models: bool, need_cuda: bool) -> bool:
+    """Downloads what is missing in one window. Returns False only when the models are still
+    missing: without the CUDA libraries the application runs on the CPU."""
+    sizes = []
+    if need_models:
+        sizes.append("the speech models (about 1.7 GB)")
+    if need_cuda:
+        sizes.append("the NVIDIA graphics card libraries (about 1.3 GB)")
     root = tk.Tk()
     root.title("Live Transcription — first setup")
     root.geometry("620x360")
     root.resizable(True, True)
     ttk.Label(root, text="Preparing Live Transcription", font=("TkDefaultFont", 17, "bold")) \
         .pack(anchor="w", padx=24, pady=(22, 6))
-    ttk.Label(root, text=("The speech models are downloaded once (about 1.7 GB). "
+    ttk.Label(root, text=(f"Downloaded once: {' and '.join(sizes)}. "
                           "Keep this window open. Your recordings never leave this computer."),
               wraplength=570, justify="left").pack(anchor="w", padx=24, pady=(0, 14))
     progress = ttk.Progressbar(root, mode="indeterminate")
@@ -36,14 +45,21 @@ def install_models() -> bool:
     events: queue.Queue[tuple[str, object]] = queue.Queue()
     result = {"ok": False}
 
-    def worker() -> None:
+    def run(script: str) -> None:
         process = subprocess.Popen(
-            [sys.executable, os.path.join(paths.APP_DIR, "download_models.py")],
+            [sys.executable, os.path.join(paths.APP_DIR, script)],
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
         assert process.stdout is not None
         for line in process.stdout:
             events.put(("line", line))
-        events.put(("done", process.wait() == 0 and models_ready()))
+        process.wait()
+
+    def worker() -> None:
+        if need_models:
+            run("download_models.py")
+        if need_cuda and models_ready():
+            run("cuda_runtime.py")
+        events.put(("done", models_ready()))
 
     def poll() -> None:
         try:
@@ -74,7 +90,9 @@ def install_models() -> bool:
 
 
 if __name__ == "__main__":
-    if not models_ready() and not install_models():
+    need_models = not models_ready()
+    need_cuda = cuda_runtime.needed()
+    if (need_models or need_cuda) and not first_setup(need_models, need_cuda):
         raise SystemExit(1)
     args = [sys.executable, os.path.join(paths.APP_DIR, "transcribe.py"), *sys.argv[1:]]
     if os.name == "nt":

@@ -12,6 +12,9 @@
   SmartScreen guidance in the documentation.
 - Rebuilt Windows installer (same version): fixed the installed app exiting silently at start,
   because the install folder name contains a space. macOS is unchanged.
+- Windows installer no longer bundles the NVIDIA CUDA libraries (about 1.3 GB): on computers
+  with an NVIDIA driver they are downloaded once at first start, so the GPU is actually used by
+  the installed app; other computers run on the CPU as before.
 
 ## v1.21 — 2026-11-15
 
