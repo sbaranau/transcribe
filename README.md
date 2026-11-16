@@ -144,8 +144,8 @@ system dialog; less-used options stay under **Additional settings**. During reco
 shown separately from confirmed text and the translation column can be hidden temporarily.
 
 <p>
-<img src="docs/screenshots/1-before.png" alt="Before the call on macOS: language, translation and microphone selection with a prominent red Start recording button" width="49%">
-<img src="docs/screenshots/3-after.png" alt="After the call on macOS: start a new recording immediately or create the final transcript, translation and summary" width="49%">
+<img src="docs/screenshots/1-before.png" alt="The start screen on Windows: meeting language, translation, microphone and computer sound, the red Start recording button and Transcribe a recording for a file you already have" width="49%">
+<img src="docs/screenshots/3-recording.png" alt="Transcribing a recording made elsewhere on Windows: language, speakers, translation and AI options, the processing log, and buttons to open the text and its translation" width="49%">
 </p>
 
 The results of a recording go into a folder next to it:
