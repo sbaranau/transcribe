@@ -188,13 +188,13 @@ TEXTS = {
     "win.about": ("About", "Über", "О программе"),
     "win.about_text": (
         "Live Transcription {version}\n\nLocal recording, transcription and translation. "
-        "Audio and text stay on this Mac unless you explicitly select an external AI.\n\n"
+        "Audio and text stay on this PC unless you explicitly select an external AI.\n\n"
         "Models and settings: {folder}",
         "Live Transcription {version}\n\nLokale Aufnahme, Transkription und Übersetzung. "
-        "Audio und Text bleiben auf diesem Mac, sofern Sie nicht ausdrücklich eine externe KI wählen.\n\n"
+        "Audio und Text bleiben auf diesem PC, sofern Sie nicht ausdrücklich eine externe KI wählen.\n\n"
         "Modelle und Einstellungen: {folder}",
         "Live Transcription {version}\n\nЛокальная запись, расшифровка и перевод. "
-        "Аудио и текст остаются на этом Mac, если вы явно не выбрали внешний ИИ.\n\n"
+        "Аудио и текст остаются на этом PC, если вы явно не выбрали внешний ИИ.\n\n"
         "Модели и настройки: {folder}"),
     "win.loading": ("Loading the speech recognition model...", "Lade das Spracherkennungsmodell...",
                     "Загружаю модель распознавания..."),
