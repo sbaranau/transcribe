@@ -76,4 +76,9 @@ def install_models() -> bool:
 if __name__ == "__main__":
     if not models_ready() and not install_models():
         raise SystemExit(1)
-    os.execv(sys.executable, [sys.executable, os.path.join(paths.APP_DIR, "transcribe.py"), *sys.argv[1:]])
+    args = [sys.executable, os.path.join(paths.APP_DIR, "transcribe.py"), *sys.argv[1:]]
+    if os.name == "nt":
+        # os.execv on Windows spawns a new process without quoting its arguments, which breaks
+        # paths with spaces such as "...\Programs\Live Transcription"; subprocess quotes them.
+        raise SystemExit(subprocess.call(args))
+    os.execv(sys.executable, args)
