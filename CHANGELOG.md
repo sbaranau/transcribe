@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.25 — 2026-11-16
+
+- The window opens on a home screen with two equal choices, "Meeting now" and "Existing
+  recording", and the last five results (click to open their folder). The meeting settings are
+  their own screen with a Back button, so transcribing a file is no longer hidden below them.
+- More AIs are found for the check and the summary: Gemini CLI, GitHub Copilot CLI and Qwen
+  Code, each with the user's own account login (no API keys), and local model servers on the
+  default ports of Ollama, LM Studio, Jan, GPT4All, Msty, KoboldCpp, text-generation-webui,
+  llama.cpp, LocalAI, vLLM, Docker Model Runner and LiteLLM.
+
 ## v1.24 — 2026-11-16
 
 - The AI options (text check, summary, translation check) are not offered when no AI is ready
