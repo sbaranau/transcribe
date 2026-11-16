@@ -10,6 +10,8 @@
 - Kept the repository setup as a separate source/developer installation.
 - Limited the repeated security-approval update warning to macOS; Windows receives its own
   SmartScreen guidance in the documentation.
+- Rebuilt Windows installer (same version): fixed the installed app exiting silently at start,
+  because the install folder name contains a space. macOS is unchanged.
 
 ## v1.21 — 2026-11-15
 
