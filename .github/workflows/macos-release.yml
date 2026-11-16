@@ -13,17 +13,33 @@ jobs:
   dmg:
     runs-on: macos-15
     steps:
+      # A tag moved to a Windows-only fix must not replace the DMG people already approved.
+      - name: Skip when the release already has a DMG
+        id: existing
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets \
+              -q '.assets[].name' 2>/dev/null | grep -q '\.dmg$'; then
+            echo "Release $GITHUB_REF_NAME already has a DMG; not rebuilding it."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@v6
+        if: steps.existing.outputs.skip != 'true'
       - uses: astral-sh/setup-uv@v7
+        if: steps.existing.outputs.skip != 'true'
       - name: Build Apple Silicon DMG
+        if: steps.existing.outputs.skip != 'true'
         run: ./macos/build-release.sh
       - name: Keep a downloadable workflow artifact
+        if: steps.existing.outputs.skip != 'true'
         uses: actions/upload-artifact@v6
         with:
           name: Live-Transcription-macOS
           path: dist/*.dmg
       - name: Add DMG to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && steps.existing.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
