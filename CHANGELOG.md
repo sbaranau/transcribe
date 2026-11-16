@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.27 — 2026-11-16
+
+- The Windows installer carries a fixed product name and version, and the release workflow is
+  prepared for free code signing by SignPath Foundation and for publishing to winget; both are
+  switched on once they are set up (docs/SIGNING.md). Until then the installer stays unsigned.
+- The project page has a code signing policy and a privacy statement that says exactly what the
+  program downloads and what it sends, and when.
+
 ## v1.26 — 2026-11-16
 
 - The processing log can be scrolled back and read while it runs: new lines follow only while
