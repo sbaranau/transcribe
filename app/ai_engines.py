@@ -1,10 +1,15 @@
 """The AI tools that can write the summary: finding them, remembering a path the user gave,
 and calling them.
 
-- claude: Claude Code CLI (`claude -p`), under the login of whoever runs the tool.
-- codex:  OpenAI Codex CLI (`codex exec`), logged in with ChatGPT; the "ChatGPT" choice.
-- local:  a local model server with an OpenAI-style API: Ollama, LM Studio, Jan, llama.cpp
-          and others. The text stays on the computer.
+- claude:  Claude Code CLI (`claude -p`), under the login of whoever runs the tool.
+- codex:   OpenAI Codex CLI (`codex exec`), logged in with ChatGPT; the "ChatGPT" choice.
+- gemini:  Google Gemini CLI, logged in with a Google account.
+- copilot: GitHub Copilot CLI, logged in with a GitHub account that has Copilot.
+- qwen:    Qwen Code, logged in with a Qwen account.
+- local:   a local model server with an OpenAI-style API: Ollama, LM Studio, Jan, GPT4All,
+           llama.cpp, vLLM and others (LOCAL_SERVERS). The text stays on the computer.
+
+Only tools with their own command line and account login are used; no API keys are asked for.
 
 Each call keeps the person's own setup out and saves no session. A path or address entered by
 the user is stored in ai.local.ini next to this file (not in git).
@@ -26,10 +31,24 @@ from ui_text import t
 TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
 SETTINGS_FILE = paths.config("ai.local.ini")
 NOTES_PROMPT_FILE = os.path.join(TOOL_DIR, "summary_notes_prompt.md")
-ENGINES = ["claude", "codex", "local"]
+ENGINES = ["claude", "codex", "gemini", "copilot", "qwen", "local"]
 TITLES = {"claude": "Claude (Claude Code)", "codex": "ChatGPT (Codex CLI)"}
-# Default ports of local model servers; a different one can be entered as an address.
-LOCAL_SERVERS = ["http://127.0.0.1:11434", "http://127.0.0.1:1234"]  # Ollama, LM Studio
+# Default addresses of local model servers, in the order they are preferred; a different one can
+# be entered as an address. All of them offer an OpenAI-style API (/v1/models, chat completions),
+# Ollama and Msty also their own. Shared ports (8080, 8000, 5000) are named by what is most common.
+LOCAL_SERVERS = {
+    "http://127.0.0.1:11434": "Ollama",
+    "http://127.0.0.1:1234": "LM Studio",
+    "http://127.0.0.1:1337": "Jan",
+    "http://127.0.0.1:4891": "GPT4All",
+    "http://127.0.0.1:10000": "Msty",
+    "http://127.0.0.1:5001": "KoboldCpp",
+    "http://127.0.0.1:5000": "text-generation-webui / TabbyAPI",
+    "http://127.0.0.1:8080": "llama.cpp / LocalAI / llamafile",
+    "http://127.0.0.1:8000": "vLLM / Lemonade",
+    "http://127.0.0.1:12434": "Docker Model Runner",
+    "http://127.0.0.1:4000": "LiteLLM",
+}
 # Local models have small context windows: longer transcripts are summarized in parts of about
 # this many characters (each part to notes, then the notes to the summary). ai.local.ini
 # [local] chunk_chars and context override it.
@@ -99,25 +118,55 @@ def find_claude() -> str | None:
     return fallback if os.path.isfile(fallback) else None
 
 
+def find_npm_tool(name: str) -> str | None:
+    """A tool installed with npm: on Windows its .cmd shim (the .ps1 does not start from Python),
+    preferring npm's own folder, since another program may have put a same-named shim earlier on
+    PATH (VS Code puts a "copilot" shim there that is not the Copilot CLI)."""
+    if os.name == "nt":
+        npm_folder = os.path.join(os.environ.get("APPDATA", ""), "npm", name + ".cmd")
+        if os.path.isfile(npm_folder):
+            return npm_folder
+    for candidate in (name + ".cmd", name) if os.name == "nt" else (name,):
+        found = shutil.which(candidate)
+        if found and "microsoft vs code" not in found.lower():
+            return found
+    return None
+
+
 def find_codex() -> str | None:
-    # npm installs codex, codex.cmd and codex.ps1; only the .cmd starts from Python.
-    found = shutil.which("codex.cmd") or shutil.which("codex")
-    return found
+    return find_npm_tool("codex")
+
+
+# The command-line AI tools besides Claude Code and Codex: all installed with npm, each logged
+# in with the person's own account (no API keys are asked for here).
+CLI_TOOLS = {
+    "gemini": {"title": "Gemini (Gemini CLI)", "login": "login.gemini"},
+    "copilot": {"title": "GitHub Copilot (Copilot CLI)", "login": "login.copilot"},
+    "qwen": {"title": "Qwen (Qwen Code)", "login": "login.qwen"},
+}
+TITLES.update({engine: spec["title"] for engine, spec in CLI_TOOLS.items()})
 
 
 def find_engines() -> dict[str, str]:
     """Installed AI tools: engine -> executable path or server address."""
     settings = load_settings()
     found = {}
-    for engine, search in (("claude", find_claude), ("codex", find_codex)):
+    searches = [("claude", find_claude), ("codex", find_codex)]
+    searches += [(engine, lambda name=engine: find_npm_tool(name)) for engine in CLI_TOOLS]
+    for engine, search in searches:
         remembered = settings.get(engine, "path", fallback=None)
         if remembered and os.path.isfile(remembered):
             found[engine] = remembered
         elif location := search():
             found[engine] = location
     remembered_url = settings.get("local", "url", fallback=None)
-    for url in ([remembered_url] if remembered_url else []) + LOCAL_SERVERS:
-        if local_models(url):
+    candidates = ([remembered_url] if remembered_url else []) + list(LOCAL_SERVERS)
+    # Asked side by side: one at a time, the closed ports would add up to several seconds.
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=len(candidates)) as pool:
+        answers = list(pool.map(local_models, candidates))
+    for url, models in zip(candidates, answers):
+        if models:
             found["local"] = url
             break
     return found
@@ -128,21 +177,22 @@ def classify(entered: str) -> tuple[str, str] | None:
     entered = entered.strip().strip('"')
     if entered.lower().startswith(("http://", "https://")):
         return ("local", entered.rstrip("/")) if local_models(entered) else None
+    tools = ["claude", "codex", *CLI_TOOLS]
     if os.path.isdir(entered):
-        for name in ("claude.exe", "codex.cmd", "claude.cmd", "claude", "codex"):
+        names = ["claude.exe", "claude.cmd"] + [tool + ".cmd" for tool in tools[1:]] + tools
+        for name in names:
             if os.path.isfile(os.path.join(entered, name)):
                 entered = os.path.join(entered, name)
                 break
     if not os.path.isfile(entered):
         return None
     name = os.path.basename(entered).lower()
-    if name.startswith("claude"):
-        return "claude", entered
-    if name.startswith("codex"):
-        if name.endswith(".ps1"):
-            sibling = os.path.splitext(entered)[0] + ".cmd"
-            entered = sibling if os.path.isfile(sibling) else entered
-        return "codex", entered
+    for engine in tools:
+        if name.startswith(engine):
+            if name.endswith(".ps1"):  # npm's PowerShell shim; the .cmd next to it starts
+                sibling = os.path.splitext(entered)[0] + ".cmd"
+                entered = sibling if os.path.isfile(sibling) else entered
+            return engine, entered
     return None
 
 
@@ -159,6 +209,10 @@ def check_login(engine: str, location: str) -> tuple[bool | None, str]:
     (False, what to do), or (None, why it could not be told) for versions without the command."""
     if engine == "local":
         return (True, "") if local_models(location) else (False, t("login.server"))
+    if engine in CLI_TOOLS:
+        # None of them has a status command (Nov 2026), and their login files are not a reliable
+        # sign either (keychains). A missing login shows when it is used, with how to log in.
+        return None, ""
     command = [location, "auth", "status"] if engine == "claude" else [location, "login", "status"]
     try:
         result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8",
@@ -201,7 +255,8 @@ def describe(engine: str, location: str) -> str:
     if engine == "local":
         models = local_models(location)
         model = load_settings().get("local", "model", fallback=None) or (models[0] if models else "?")
-        return f"{title(engine)}: {model} ({location})"
+        server = LOCAL_SERVERS.get(location.rstrip("/"))
+        return f"{title(engine)}{f' ({server})' if server else ''}: {model} ({location})"
     account = ACCOUNTS.get(engine)
     return f"{title(engine)} — {account}" if account else title(engine)
 
@@ -238,6 +293,41 @@ def run_codex(path: str, prompt: str, transcript: str) -> str:
     if result.returncode != 0 or not text:
         raise RuntimeError(f"codex exit {result.returncode}: {result.stderr.strip()[-500:]}")
     return text
+
+
+def cli_command(engine: str, path: str) -> list[str]:
+    """Flags per tool (from their docs, Nov 2026) that keep the person's own setup out as far as
+    the tool allows: no extensions, MCP servers or custom instructions, no edits or commands,
+    no saved chat where it can be switched off. The text itself always goes through stdin: a
+    .cmd shim limits the command line to 8191 characters and mangles quotes."""
+    if engine == "gemini":
+        # stdin comes first, then this short -p; the global ~/.gemini/GEMINI.md cannot be
+        # switched off per call. Tools that need approval are refused in headless mode.
+        return [path, "--output-format", "text", "--approval-mode", "default", "-e", "none",
+                "-p", "Follow the instructions above."]
+    if engine == "copilot":
+        # With -p the piped input would be ignored, so everything comes through stdin.
+        return [path, "-s", "--no-ask-user", "--no-custom-instructions", "--disable-builtin-mcps"]
+    # qwen: --safe-mode leaves out context files, hooks, extensions, skills and MCP servers.
+    return [path, "--safe-mode", "--approval-mode", "plan", "--chat-recording", "false",
+            "-o", "text", "-p", "Follow the instructions above."]
+
+
+def run_cli(engine: str, path: str, prompt: str, transcript: str) -> str:
+    with tempfile.TemporaryDirectory() as empty:  # nothing of the person's files to read
+        env = dict(os.environ, GEMINI_CLI_TRUST_WORKSPACE="true", NO_COLOR="1")
+        try:
+            result = subprocess.run(
+                cli_command(engine, path),
+                input=f"{prompt}\n\n<transcript>\n{transcript}\n</transcript>\n",
+                capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=empty, env=env)
+        except OSError as error:
+            raise RuntimeError(f"{engine}: {error}") from error
+    if result.returncode != 0 or not result.stdout.strip():
+        detail = (result.stderr.strip() or result.stdout.strip())[-500:]
+        raise RuntimeError(f"{engine} exit {result.returncode}: {detail}\n"
+                           f"{t(CLI_TOOLS[engine]['login'])}")
+    return result.stdout.strip()
 
 
 def local_chat(url: str, model: str, system: str, user: str, context: int) -> str:
@@ -318,6 +408,8 @@ def run_single(engine: str, location: str, prompt: str, text: str) -> str:
         return run_claude(location, prompt, text)
     if engine == "codex":
         return run_codex(location, prompt, text)
+    if engine in CLI_TOOLS:
+        return run_cli(engine, location, prompt, text)
     settings = load_settings()
     models = local_models(location)
     model = settings.get("local", "model", fallback=None) or (models[0] if models else None)
@@ -332,4 +424,6 @@ def run(engine: str, location: str, prompt: str, transcript: str, report=print) 
         return run_claude(location, prompt, transcript)
     if engine == "codex":
         return run_codex(location, prompt, transcript)
+    if engine in CLI_TOOLS:
+        return run_cli(engine, location, prompt, transcript)
     return run_local(location, prompt, transcript, report)

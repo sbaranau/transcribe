@@ -762,7 +762,7 @@ def choose_ai(args, interactive: bool) -> bool:
         args.ai_engine, args.ai_location = engine, found[engine]
         return True
     if not interactive:
-        print("No AI found (Claude Code, Codex, or a local model server); the check and the "
+        print("No AI found (Claude Code, Codex, Gemini CLI, Copilot CLI, Qwen Code, or a local model server); the check and the "
               "summary are skipped.", file=sys.stderr)
         return False
     print(t("ai.none_found"))
@@ -956,7 +956,8 @@ def main(argv: list[str] | None = None) -> int:
                              "unless it is a local model); made from the checked text if there is one")
     parser.add_argument("--ai", choices=ai_engines.ENGINES, default=None,
                         help="AI for the check and the summary: claude (Claude Code), codex (ChatGPT "
-                             "via Codex CLI) or local (Ollama, LM Studio, ...); default: the first installed")
+                             "via Codex CLI), gemini (Gemini CLI), copilot (GitHub Copilot CLI), qwen "
+                             "(Qwen Code) or local (Ollama, LM Studio, Jan, ...); default: the first installed")
     parser.add_argument("--translate", choices=list(translator.LANGUAGES), default=None,
                         help="also translate the transcript locally into en, de or ru (Opus-MT, "
                              "nothing leaves the computer): <name>.<lang>.txt")

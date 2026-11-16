@@ -29,9 +29,11 @@ remains available for developers. See the
   each one into the transcript at its moment: `meeting.md`, readable in any Markdown viewer.
 - **Translates** between English, German and Russian locally (Opus-MT), live in a second column
   or afterwards.
-- **Optional AI steps** with an AI you have installed (Claude Code, ChatGPT through the Codex CLI,
-  or a local model in Ollama or LM Studio): put in names and fix speaker borders, correct the
-  translation, and write a summary that keeps every decision, task and date.
+- **Optional AI steps** with an AI you have installed and signed in to (Claude Code, ChatGPT
+  through the Codex CLI, Gemini CLI, GitHub Copilot CLI, Qwen Code, or a local model in Ollama,
+  LM Studio, Jan, GPT4All, llama.cpp, vLLM and others; no API keys): put in names and fix
+  speaker borders, correct the translation, and write a summary that keeps every decision, task
+  and date. Without any AI these options are not shown, and the window says what to install.
 - **Interface in English, German and Russian.**
 - **Guided live interface** that clearly separates setup, model download, recording, finalization
   and result creation, with accessible progress and error states.

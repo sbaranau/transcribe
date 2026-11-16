@@ -13,9 +13,13 @@ idea, task and date.
   (pyannote segmentation 3.0 + NVIDIA NeMo TitaNet-small embeddings) on the CPU, in parallel
   with Whisper, labels paragraphs "Speaker 1", "Speaker 2", ... (in the meeting's language).
 - **Summary**: made by an AI the user has installed, chosen at the start: Claude Code
-  (`claude -p`), ChatGPT through the OpenAI Codex CLI (`codex exec`), or a local model server
-  with an OpenAI-style API (Ollama, LM Studio, Jan, llama.cpp, ...). Claude and ChatGPT get the
-  transcript under the user's account, so the summary is only for meetings whose content the
+  (`claude -p`), ChatGPT through the OpenAI Codex CLI (`codex exec`), Gemini CLI, GitHub
+  Copilot CLI or Qwen Code (text on stdin from an empty folder, with the tool's own switches for
+  no extensions, MCP or custom instructions; `ai_engines.cli_command`), or a local model server
+  with an OpenAI-style API (Ollama, LM Studio, Jan, GPT4All, llama.cpp, vLLM, ...; default
+  ports in `ai_engines.LOCAL_SERVERS`, asked side by side). Only tools with their own command
+  line and account login are used, never API keys. The cloud tools get the transcript under
+  the user's account, so the summary is only for meetings whose content the
   rules the user works under allow (the organization's AI usage rules for a work account, and
   the provider's terms): typically no personal data beyond what is needed and never health or
   other special categories, no credentials, no confidential client material. A local model
