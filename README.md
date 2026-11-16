@@ -133,12 +133,16 @@ is less tested. See the [technical description](docs/TECHNICAL.md#macos-and-linu
 
 | Shortcut | What it does |
 |---|---|
-| **Transcribe a recording** | Opens a window for recordings made elsewhere (Teams, Zoom, a phone, ...): drop files onto the shortcut, send them with Explorer's **Send to**, or start it and choose them. Choose the language, speakers, translation, check or summary with check boxes; progress and buttons to open the results appear in the same window. Results go into a folder named after each recording, next to it. The live window's start screen has the same **Transcribe a recording…** button. |
-| **Live meeting transcription** | Opens the window above. Choose the language and, if wanted, a translation, then start before the call. After Stop, the same window offers the full processing. |
+| **Live Transcription** | Opens the home screen with two equal choices: **Meeting now** (choose the language and, if wanted, a translation, then start before the call; after Stop the same window offers the full processing) and **Existing recording**. Below them, the last five results open their folder. |
+| **Transcribe a recording** | Goes straight to the processing of recordings made elsewhere (Teams, Zoom, a phone, ...): drop files onto the shortcut, send them with Explorer's **Send to**, or start it and choose them. Choose the language, speakers, translation, check or summary with check boxes; progress and buttons to open the results appear in the same window. Results go into a folder named after each recording, next to it. |
 | **Setup and update** | Runs the setup again. |
 
 The shortcut names follow the interface language. You can switch it at the top right of the
 window, or with `--ui-language en|de|ru`.
+
+<p>
+<img src="docs/screenshots/1-home.png" alt="The home screen on Windows: two equal cards, Meeting now with a red Start button and Existing recording with a blue Choose file button, and the recent results below" width="70%">
+</p>
 
 The live workflow has five explicit states: preparation, translation-model download, recording,
 finishing the last phrases, and creating results. The folder can be edited or chosen with the
@@ -146,7 +150,7 @@ system dialog; less-used options stay under **Additional settings**. During reco
 shown separately from confirmed text and the translation column can be hidden temporarily.
 
 <p>
-<img src="docs/screenshots/1-before.png" alt="The start screen on Windows: meeting language, translation, microphone and computer sound, the red Start recording button and Transcribe a recording for a file you already have" width="49%">
+<img src="docs/screenshots/2-before.png" alt="Meeting now on Windows: Back, meeting language, translation into German with its model ready, microphone and computer sound, and the red Start recording button" width="49%">
 <img src="docs/screenshots/3-recording.png" alt="Transcribing a recording made elsewhere on Windows: language, speakers, translation and AI options, the processing log, and buttons to open the text and its translation" width="49%">
 </p>
 
