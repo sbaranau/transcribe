@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Recordings made elsewhere are transcribed in the window instead of a console with numbered
+  questions: a **Transcribe a recording…** button on the start screen, and the Transcribe a
+  recording shortcut, Explorer Send to and the Linux menu open the window with the files. The
+  same check boxes as after a live recording, progress, and buttons to open each result.
+- The language of such a recording is detected by default instead of taking the last live
+  meeting's language.
+- The console questions remain in `drop-files-here.cmd` / `.sh`.
+
 ## v1.22 — 2026-11-15
 
 - Added a single-file per-user Windows installer built and published by GitHub Actions.

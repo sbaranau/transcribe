@@ -1,19 +1,12 @@
 #!/usr/bin/env bash
-# Double-click in Finder, then drag one or more recordings into this Terminal window.
+# Double-click in Finder: opens the window to transcribe recordings made elsewhere; choose them
+# there. The results go into a folder named after each recording, next to it.
 MACOS="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ $# -eq 0 ]; then
-    echo "Drag a recording into this window and press Return:"
-    IFS= read -r file
-    # Terminal shell-escapes a dragged path. shlex handles spaces, quotes and punctuation without
-    # executing any part of the entered text.
-    file="$(printf '%s\n' "$file" | "$MACOS/../app/venv/bin/python" -c \
-        'import shlex, sys; values = shlex.split(sys.stdin.read()); print(values[0] if values else "")')"
-    [ -n "$file" ] || { echo "No file was entered." >&2; exit 2; }
-    set -- "$file"
-fi
-"$MACOS/.internal/transcribe.sh" "$@" --srt --ask
+"$MACOS/.internal/transcribe.sh" --files "$@"
 status=$?
-printf '\nPress Return to close...'
-read -r _ || true
+if [ "$status" -ne 0 ]; then
+    printf '\nPress Return to close...'
+    read -r _ || true
+fi
 "$MACOS/.internal/close-terminal-window.sh"
 exit "$status"

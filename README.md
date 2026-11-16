@@ -131,7 +131,7 @@ is less tested. See the [technical description](docs/TECHNICAL.md#macos-and-linu
 
 | Shortcut | What it does |
 |---|---|
-| **Transcribe a recording** | Drag recordings onto it. It asks the language, whether to separate speakers, translate, check or summarize, and writes the results next to the recording. |
+| **Transcribe a recording** | Opens a window for recordings made elsewhere (Teams, Zoom, a phone, ...): drop files onto the shortcut, send them with Explorer's **Send to**, or start it and choose them. Choose the language, speakers, translation, check or summary with check boxes; progress and buttons to open the results appear in the same window. Results go into a folder named after each recording, next to it. The live window's start screen has the same **Transcribe a recording…** button. |
 | **Live meeting transcription** | Opens the window above. Choose the language and, if wanted, a translation, then start before the call. After Stop, the same window offers the full processing. |
 | **Setup and update** | Runs the setup again. |
 

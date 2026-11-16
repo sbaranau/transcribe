@@ -48,10 +48,14 @@ Source: "{#PayloadDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 
 [Icons]
 Name: "{group}\Live Transcription"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch-live.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\app\icons\live.ico"
-Name: "{group}\Transcribe a recording"; Filename: "{app}\transcribe-recording.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\app\icons\transcribe.ico"
+Name: "{group}\Transcribe a recording"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\transcribe-recording.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\app\icons\transcribe.ico"
 Name: "{group}\Uninstall Live Transcription"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\Live Transcription"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch-live.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\app\icons\live.ico"; Tasks: desktopicon
-Name: "{userappdata}\Microsoft\Windows\SendTo\Transcribe with Live Transcription"; Filename: "{app}\transcribe-recording.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\app\icons\transcribe.ico"; Tasks: sendto
+Name: "{userappdata}\Microsoft\Windows\SendTo\Transcribe with Live Transcription"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\transcribe-recording.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\app\icons\transcribe.ico"; Tasks: sendto
+
+[InstallDelete]
+; The console launcher of v1.22 and earlier, replaced by transcribe-recording.vbs.
+Type: files; Name: "{app}\transcribe-recording.cmd"
 
 [Run]
 Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch-live.vbs"""; Description: "Launch Live Transcription"; Flags: nowait postinstall skipifsilent

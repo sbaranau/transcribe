@@ -18,7 +18,7 @@ if ($LASTEXITCODE -ge 8) { throw "Could not copy application files (robocopy $LA
 
 Copy-Item (Join-Path $Root "VERSION"), (Join-Path $Root "LICENSE") -Destination $Payload
 Copy-Item (Join-Path $WindowsDir "release\launch-live.vbs") -Destination $Payload
-Copy-Item (Join-Path $WindowsDir "release\transcribe-recording.cmd") -Destination $Payload
+Copy-Item (Join-Path $WindowsDir "release\transcribe-recording.vbs") -Destination $Payload
 
 uv python install 3.12 --install-dir (Join-Path $Build "python-install") --no-bin
 $Python = Get-ChildItem (Join-Path $Build "python-install") -Filter python.exe -Recurse |

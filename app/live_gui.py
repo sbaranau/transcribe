@@ -53,6 +53,9 @@ FONT = "Segoe UI"
 LINUX_FONTS = ["Ubuntu", "Noto Sans", "DejaVu Sans", "Liberation Sans"]
 # Label colours for the voices of the other side (blue is kept for you).
 VOICE_COLOURS = ["#2e7d32", "#c2185b", "#ef6c00", "#6a1b9a", "#00838f", "#8d6e63"]
+# Offered in the file dialog of "Transcribe a recording" (anything ffmpeg reads also works).
+FILE_EXTENSIONS = (".mp4", ".mkv", ".mov", ".avi", ".webm", ".wmv", ".mp3", ".wav", ".m4a",
+                   ".aac", ".flac", ".ogg", ".opus", ".wma", ".txt")
 
 
 class App:
@@ -79,6 +82,9 @@ class App:
         self.paragraph_start = self.last_end = self.last_label = None
         self.drafts = {}  # label -> unfinished phrase
         self.found_ai = {}
+        # Recordings made elsewhere, chosen to be transcribed (None: the live recording flow).
+        self.files = None
+        self.model_loading = False
         self.pending_update = None
         self.text_size = 13
         self.base_folder = os.path.join(live.documents_folder(), "Transcripts")
@@ -87,7 +93,7 @@ class App:
 
         root.title(t("win.title"))
         set_icon(root)
-        root.geometry("900x760")
+        root.geometry(f"900x{min(820, max(600, root.winfo_screenheight() - 90))}")
         root.minsize(720, 520)
         root.protocol("WM_DELETE_WINDOW", self.on_close)
         style = ttk.Style()
@@ -109,8 +115,14 @@ class App:
 
         if loaded:
             self.events.put(("model", (*loaded, "")))
+        elif args.files:
+            # Started to transcribe recordings (shortcut, Send to): the processing loads its own
+            # model, so none is loaded here unless the file dialog is cancelled. Only once: a
+            # later window of this process (Back to start) is the normal recording screen.
+            args.files, inputs, args.inputs = False, list(args.inputs), []
+            root.after(150, lambda: self.open_files(inputs or self.ask_files()))
         else:
-            threading.Thread(target=self.load_model, daemon=True).start()
+            self.start_model_loading()
         if os.environ.get("TRANSCRIBE_CHECK_UPDATES") == "1":
             threading.Thread(target=self.check_update, args=(False,), daemon=True).start()
         root.after(100, self.poll)
@@ -298,7 +310,56 @@ class App:
         self.start_button.bind("<Leave>", lambda _event: self.start_button.configure(
             background="#e32636") if self.start_enabled else None)
         self.start_button.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(10, 2))
+        # A recording made elsewhere goes through the same processing as one made here.
+        file_line = ttk.Frame(frame)
+        file_line.grid(row=9, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        ttk.Button(file_line, text=t("win.transcribe_file"), style="Big.TButton",
+                   command=lambda: self.open_files(self.ask_files())).pack(side="left")
+        ttk.Label(file_line, text=t("win.transcribe_file_note"), style="Note.TLabel").pack(
+            side="left", padx=(10, 0))
         return frame
+
+    # --- recordings made elsewhere ----------------------------------------------------------------
+
+    def ask_files(self) -> list[str]:
+        patterns = " ".join("*" + extension for extension in FILE_EXTENSIONS)
+        chosen = filedialog.askopenfilenames(
+            parent=self.root, title=t("win.pick_title"),
+            filetypes=[(t("win.media_files"), patterns), (t("win.all_files"), "*")])
+        return [os.path.abspath(path) for path in chosen or ()]
+
+    def open_files(self, files: list[str]) -> None:
+        """Shows the processing panel for recordings (or .txt transcripts) made elsewhere."""
+        files = [path for path in files if os.path.isfile(path)]
+        if not files:
+            if self.files is None and self.model is None and not self.model_loading:
+                self.start_model_loading()  # dialog cancelled at start: the recording screen
+            return
+        if self.processing:
+            return
+        self.files = files
+        self.folder = os.path.dirname(files[0])
+        # The processing runs in its own process with its own model; two copies would not fit
+        # on many graphics cards.
+        self.model = self.hotwords = None
+        gc.collect()
+        if self.after_frame is not None:  # "Other files…": the panel is built again for them
+            self.after_frame.destroy()
+            self.after_footer.destroy()
+            self.after_frame = None
+        self.show_after()
+
+    @staticmethod
+    def file_base(path: str) -> str:
+        """Output path without extension, as transcribe.py writes it: a transcript's results lie
+        next to it, a recording's in a folder named after it."""
+        if path.lower().endswith(".txt"):
+            return os.path.splitext(path)[0]
+        return tool.output_base(path, None)
+
+    def start_model_loading(self) -> None:
+        self.model_loading = True
+        threading.Thread(target=self.load_model, daemon=True).start()
 
     def toggle_advanced(self) -> None:
         self.advanced_visible = not self.advanced_visible
@@ -848,17 +909,33 @@ class App:
             return
         self.stopping_progress.stop()
         self.stopping_overlay.place_forget()
+        file_mode = self.files is not None
+        media = [path for path in self.files if not path.lower().endswith(".txt")] if file_mode else []
+        self.setup_frame.pack_forget()
         self.meters_frame.pack_forget()
         self.interface_box.pack_forget()
         self.controls_frame.pack_forget()
         self.text_frame.pack_forget()
-        seconds = self.session.seconds
-        self.status.configure(text=t("win.stopped", length=tool.format_clock(seconds)), foreground=GREEN)
+        if file_mode:
+            self.status.configure(text=t("win.files_chosen", count=len(self.files)), foreground=GREEN)
+            self.text.configure(state="normal")
+            self.text.delete("1.0", "end")  # no "the meeting text will appear here"
+            self.text.configure(state="disabled")
+        else:
+            seconds = self.session.seconds
+            self.status.configure(text=t("win.stopped", length=tool.format_clock(seconds)), foreground=GREEN)
+            self.model = self.session.model = None
         self.timer.configure(text="")
-        self.model = self.session.model = None
         gc.collect()
 
-        frame = ttk.LabelFrame(self.root, text=t("win.after"), padding=12)
+        frame = ttk.LabelFrame(self.root, text=t("win.files_after") if file_mode else t("win.after"),
+                               padding=12)
+        # Room for the options, the progress and some lines of the processing log below them.
+        screen_height = self.root.winfo_screenheight()
+        wanted = min(screen_height - 90, 1000)
+        if self.root.winfo_height() < wanted and self.root.state() == "normal":
+            top = max(0, min(self.root.winfo_y(), screen_height - wanted - 60))
+            self.root.geometry(f"{max(self.root.winfo_width(), 900)}x{wanted}+{self.root.winfo_x()}+{top}")
         self.after_frame = frame
         self.tools_frame.pack(fill="x")
         set_icon(self.root, recording=False)
@@ -868,10 +945,12 @@ class App:
         # Pack the footer before the large settings frame. Tk allocates packed widgets in packing
         # order, so primary actions remain visible even at the minimum window height.
         footer = ttk.Frame(self.root)
+        self.after_footer = footer
         footer.pack(side="bottom", fill="x", padx=14, pady=(0, 12))
         ttk.Button(footer, text=t("win.close"), command=self.on_close).pack(side="right")
         self.new_recording_button = ttk.Button(
-            footer, text=t("win.new_recording"), style="Big.TButton", command=self.new_recording)
+            footer, text=t("win.back_to_start") if file_mode else t("win.new_recording"),
+            style="Big.TButton", command=self.new_recording)
         self.new_recording_button.pack(side="right", padx=(0, 8))
         self.footer_results = ttk.Frame(footer)
         self.footer_results.pack(side="left", fill="both", expand=True)
@@ -880,21 +959,49 @@ class App:
         self.result_buttons = ttk.Frame(self.footer_results)
         frame.pack(fill="x", padx=14, pady=(0, 8))
         self.text_frame.pack(fill="both", expand=True, padx=14, pady=(0, 8))
-        ttk.Label(frame, text=t("win.live_saved", path=self.session.txt_path), style="Note.TLabel",
-                  wraplength=760).grid(row=0, column=0, columnspan=3, sticky="w")
-        ttk.Label(frame, text=t("win.after_intro"), wraplength=760).grid(
-            row=1, column=0, columnspan=3, sticky="w", pady=(6, 10))
+        if file_mode:
+            line = ttk.Frame(frame)
+            line.grid(row=0, column=0, columnspan=3, sticky="ew")
+            shown = [os.path.basename(path) for path in self.files[:5]]
+            if len(self.files) > 5:
+                shown.append(f"… (+{len(self.files) - 5})")
+            ttk.Label(line, text="\n".join(shown), font=(FONT, 10, "bold"), wraplength=600,
+                      justify="left").pack(side="left", anchor="w")
+            self.change_files_button = ttk.Button(
+                line, text=t("win.change_files"), command=lambda: self.open_files(self.ask_files()))
+            self.change_files_button.pack(side="right", anchor="n")
+        else:
+            ttk.Label(frame, text=t("win.live_saved", path=self.session.txt_path), style="Note.TLabel",
+                      wraplength=760).grid(row=0, column=0, columnspan=3, sticky="w")
+        ttk.Label(frame, text=t("win.files_intro") if file_mode else t("win.after_intro"),
+                  wraplength=760).grid(row=1, column=0, columnspan=3, sticky="w", pady=(6, 10))
         ttk.Label(frame, text=t("win.section_transcript"), style="Note.TLabel").grid(
             row=2, column=0, columnspan=3, sticky="w", pady=(0, 2))
 
-        self.redo = tk.BooleanVar(value=True)
+        self.redo = tk.BooleanVar(value=bool(media) if file_mode else True)
         self.split = tk.BooleanVar(value=False)
         self.count = tk.StringVar(value="0")
         self.check = tk.BooleanVar(value=False)
         self.summary = tk.BooleanVar(value=False)
         self.delete_sound = tk.BooleanVar(value=False)
         self.redo_box = ttk.Checkbutton(frame, text=t("win.redo"), variable=self.redo, command=self.refresh_after)
-        self.redo_box.grid(row=3, column=0, columnspan=3, sticky="w", pady=2)
+        self.file_language = None
+        if not file_mode:
+            self.redo_box.grid(row=3, column=0, columnspan=3, sticky="w", pady=2)
+        elif media:
+            # A recording is always transcribed; only its language is asked (as at the start).
+            line = ttk.Frame(frame)
+            line.grid(row=3, column=0, columnspan=3, sticky="w", pady=2)
+            ttk.Label(line, text=t("win.file_language")).pack(side="left")
+            self.file_language = ttk.Combobox(line, state="readonly", width=34,
+                                              values=[name for _, name in self.languages])
+            # Detected by default: the language of the last live meeting says nothing about a
+            # recording from elsewhere, and a wrong one makes Whisper translate instead.
+            self.file_language.current(0)
+            self.file_language.pack(side="left", padx=6)
+        else:
+            ttk.Label(frame, text=t("win.transcripts_only"), style="Note.TLabel", wraplength=760).grid(
+                row=3, column=0, columnspan=3, sticky="w", pady=2)
         call = len(self.session.streams) >= 2 if hasattr(self.session, "streams") else False
         self.is_call = call  # a call has "Вы" / "Собеседники" labels even without the separation
         self.split_box = ttk.Checkbutton(
@@ -949,7 +1056,8 @@ class App:
         self.ai_warning.grid(row=12, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=(2, 4))
 
         self.delete_box = ttk.Checkbutton(frame, text=t("win.delete_sound"), variable=self.delete_sound)
-        self.delete_box.grid(row=13, column=0, columnspan=3, sticky="w", pady=(8, 2))
+        if not file_mode:  # someone else's recording is never deleted from here
+            self.delete_box.grid(row=13, column=0, columnspan=3, sticky="w", pady=(8, 2))
         buttons = ttk.Frame(frame)
         buttons.grid(row=14, column=0, columnspan=3, sticky="w", pady=(10, 0))
         # Aqua ignores custom colours on tk.Button, making this primary action look like a faint
@@ -971,7 +1079,8 @@ class App:
         self.folder_button.pack(side="left", padx=(12, 0))
         # The texts with screenshots (Markdown) as HTML with the pictures inside, for any browser.
         self.export_button = ttk.Button(buttons, text=t("win.export_html"), command=self.export_html)
-        self.export_button.pack(side="left", padx=(6, 0))
+        if not file_mode:  # screenshots exist only for recordings made here
+            self.export_button.pack(side="left", padx=(6, 0))
         ttk.Label(frame, text=t("win.processing_estimate"), style="Note.TLabel", wraplength=760).grid(
             row=15, column=0, columnspan=3, sticky="w", pady=(6, 0))
         self.processing_panel = ttk.Frame(frame)
@@ -1049,8 +1158,21 @@ class App:
                 messagebox.showwarning(t("win.no_ai_title"), t("win.no_ai_text"))
             return
         ai = self.ai_keys[self.ai_choice.current()] if self.found_ai else None
-        folder = os.path.dirname(self.session.wav_path)
-        if self.redo.get():
+        if self.files is not None:
+            # Results in a folder named after each recording, next to it (transcribe.py's default).
+            argv = list(self.files) + ["--force"]
+            if self.redo.get():
+                argv.append("--srt")
+                language = self.languages[self.file_language.current()][0] if self.file_language else None
+                if language:
+                    argv += ["--language", language]
+                if self.split.get():
+                    count = self.count.get().strip()
+                    argv += ["--speakers"] + ([count] if count.isdigit() and int(count) > 0 else [])
+                if self.check.get():
+                    argv.append("--check")
+        elif self.redo.get():
+            folder = os.path.dirname(self.session.wav_path)
             argv = [self.session.wav_path, "--srt", "--out-dir", folder, "--force"]
             if self.args.language:
                 argv += ["--language", self.args.language]
@@ -1099,7 +1221,8 @@ class App:
             if line.strip():
                 self.events.put(("log", line.rstrip()))
         code = process.wait()
-        if code == 0 and not self.cancelled and self.delete_after and os.path.exists(self.session.wav_path):
+        if (code == 0 and not self.cancelled and self.delete_after and self.session is not None
+                and os.path.exists(self.session.wav_path)):
             os.remove(self.session.wav_path)
             self.events.put(("log", t("live.sound_deleted")))
         self.events.put(("processed", code))
@@ -1112,6 +1235,10 @@ class App:
                            self.translate_box, self.after_target, self.check_translation_box,
                            self.ai_choice, self.path_entry, self.try_button, self.delete_box):
                 widget.configure(state="disabled")
+            if self.files is not None:
+                self.change_files_button.configure(state="disabled")
+                if self.file_language:
+                    self.file_language.configure(state="disabled")
             self.run_button.pack_forget()
             self.cancel_button.configure(state="normal")
             self.cancel_button.pack(side="left", before=self.folder_button)
@@ -1127,10 +1254,16 @@ class App:
                            self.delete_box):
                 widget.configure(state="normal")
             self.ai_choice.configure(state="readonly" if self.found_ai else "disabled")
+            if self.files is not None:
+                self.change_files_button.configure(state="normal")
+                if self.file_language:
+                    self.file_language.configure(state="readonly")
             self.refresh_after()
         self.refresh_export(locked)
 
     def refresh_export(self, locked: bool = False) -> None:
+        if self.session is None:
+            return  # no screenshots without a recording made here
         folder = os.path.dirname(self.session.wav_path)
         self.export_button.configure(state="normal" if screenshots.exportable(folder) and not locked else "disabled")
 
@@ -1166,12 +1299,16 @@ class App:
         stop_process_tree(self.processing)
 
     def show_results(self, code: int) -> None:
-        folder = os.path.dirname(self.session.wav_path)
+        if self.files is not None:
+            folders = list(dict.fromkeys(os.path.dirname(self.file_base(path)) for path in self.files))
+        else:
+            folders = [os.path.dirname(self.session.wav_path)]
         self.processing = None
         if self.cancelled:
             # A transcript is written to <name>.partial and renamed only when complete.
-            for leftover in glob.glob(os.path.join(glob.escape(folder), "*.partial")):
-                os.remove(leftover)
+            for folder in folders:
+                for leftover in glob.glob(os.path.join(glob.escape(folder), "*.partial")):
+                    os.remove(leftover)
             self.status.configure(text=t("win.cancelled"), foreground=RED)
             self.events.put(("log", t("win.cancelled_note")))
         else:
@@ -1180,6 +1317,10 @@ class App:
         self.lock_after(False)
         for child in self.result_buttons.winfo_children():
             child.destroy()
+        if self.files is not None:
+            self.show_file_results()
+            return
+        folder = folders[0]
         results = [("meeting.checked.md", "win.text_with_shots"), ("meeting.md", "win.text_with_shots"),
                    ("meeting.checked.txt", "win.checked_text"), ("meeting.txt", "win.text"),
                    ("meeting.live.md", "win.text_with_shots")]
@@ -1197,6 +1338,35 @@ class App:
                 ttk.Button(self.result_buttons, text=label,
                            command=lambda p=path: tool.open_path(p)).pack(side="left", padx=(0, 6))
 
+    def show_file_results(self) -> None:
+        """One button per result file of each chosen recording; with several recordings the
+        button names which one."""
+        several = len(self.files) > 1
+        suffixes = [(".checked.txt", "win.checked_text"), (".txt", "win.text")]
+        for code in translator.LANGUAGES:
+            suffixes += [(f".{code}.checked.txt", "win.checked_translation"), (f".{code}.txt", "win.translation")]
+        suffixes.append((".summary.md", "win.summary_file"))
+        for path in self.files:
+            base = self.file_base(path)
+            shown = []
+            for suffix, key in suffixes:
+                result = base + suffix
+                # A .txt input is the transcript itself, not a result of this run.
+                if (os.path.normcase(result) == os.path.normcase(path) or not os.path.isfile(result)
+                        or key in shown):
+                    continue
+                shown.append(key)
+                label = t("win.open", what=t(key))
+                if several:
+                    label += f" — {os.path.splitext(os.path.basename(path))[0]}"
+                self.results_heading.pack(anchor="w", pady=(0, 3))
+                self.result_buttons.pack(anchor="w")
+                ttk.Button(self.result_buttons, text=label,
+                           command=lambda p=result: tool.open_path(p)).pack(side="left", padx=(0, 6))
+        first_folder = os.path.dirname(self.file_base(self.files[0]))
+        if os.path.isdir(first_folder):
+            self.folder = first_folder
+
     # --- events -----------------------------------------------------------------------------------
 
     def poll(self) -> None:
@@ -1204,12 +1374,18 @@ class App:
             while True:
                 kind, data = self.events.get_nowait()
                 if kind == "model":
+                    self.model_loading = False
+                    if self.files is not None:
+                        continue  # a recording was chosen meanwhile; its processing loads its own
                     self.model, self.hotwords, note = data
                     self.status.configure(text=t("win.ready"), foreground=GREEN)
                     self.refresh_start_button()
                     self.interface.configure(state="readonly")
                     self.prepare_translation()
                 elif kind == "model_failed":
+                    self.model_loading = False
+                    if self.files is not None:
+                        continue
                     self.status.configure(text=t("win.model_failed"), foreground=RED)
                     messagebox.showerror(t("win.error"), t("win.model_failed_text", error=data, setup=tool.SETUP_HINT))
                 elif kind == "final":

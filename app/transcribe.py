@@ -928,6 +928,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--live", action="store_true",
                         help="transcribe a meeting while it happens, from the computer's sound and "
                              "the microphone, in a window (live-transcribe)")
+    parser.add_argument("--files", action="store_true",
+                        help="open the window to transcribe recordings: the given inputs, or "
+                             "choose them in a file dialog (the Transcribe a recording shortcut)")
     parser.add_argument("--ui-language", choices=list(ui_text.LANGUAGES), default=None,
                         help="language of the questions and the window: en, de or ru (remembered; "
                              "default: the one chosen last, else the system's)")
@@ -984,7 +987,7 @@ def main(argv: list[str] | None = None) -> int:
             ui_text.save_language(args.ui_language)
             import shortcuts
             shortcuts.rename_existing()
-    if args.live:
+    if args.live or args.files:
         import live
         return live.run(args)
 

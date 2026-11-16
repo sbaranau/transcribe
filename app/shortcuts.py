@@ -12,7 +12,8 @@ Linux (called by linux/menu.sh):
 
 Shortcuts and entries hold absolute paths, so they are made on each computer and are not in
 git; after moving the tool folder, run the setup again. Files can be dragged onto the
-"Transcribe a recording" shortcut like onto drop-files-here.cmd. When the interface language
+"Transcribe a recording" shortcut; it opens the window for them (transcribe-recording.cmd /
+.sh). drop-files-here.cmd / .sh keep the console questions. When the interface language
 changes, the existing ones are renamed (rename_existing); the ones of other languages are
 removed, so there is never a second set.
 """
@@ -30,19 +31,19 @@ LINUX = os.path.join(ROOT, "linux")
 ICONS = os.path.join(APP, "icons")
 # Name key -> (script in windows\, icon, window style: 1 normal, 7 minimized).
 FOLDER_SHORTCUTS = {
-    "link.transcribe": ("drop-files-here.cmd", "transcribe.ico", 1),
-    # Its console only shows technical messages; the window is what people use.
+    # Their consoles only show technical messages; the windows are what people use.
+    "link.transcribe": ("transcribe-recording.cmd", "transcribe.ico", 7),
     "link.live": ("live-transcribe.cmd", "live.ico", 7),
     "link.setup": ("setup.cmd", "setup.ico", 1),
 }
-SENDTO_SHORTCUTS = {"link.sendto": ("drop-files-here.cmd", "transcribe.ico", 1)}
+SENDTO_SHORTCUTS = {"link.sendto": ("transcribe-recording.cmd", "transcribe.ico", 7)}
 # Send To entries made by older versions; removed by sendto-add and sendto-remove.
 OLD_SENDTO = ["Расшифровать (текст)", "Расшифровать (текст и выжимка)"]
 # Linux: file name -> (name key, command in linux/, icon, in a terminal, file types).
 MEDIA_TYPES = ("audio/mpeg;audio/mp4;audio/x-m4a;audio/wav;audio/x-wav;audio/ogg;audio/flac;audio/webm;"
                "audio/aac;video/mp4;video/x-matroska;video/webm;video/quicktime;video/x-msvideo;video/mpeg;")
 MENU_ENTRIES = {
-    "transcribe-recording": ("link.transcribe", "drop-files-here.sh", "%F", "transcribe", True, MEDIA_TYPES),
+    "transcribe-recording": ("link.transcribe", "transcribe-recording.sh", "%F", "transcribe", False, MEDIA_TYPES),
     "transcribe-live": ("link.live", "live-transcribe.sh", "", "live", False, ""),
     "transcribe-setup": ("link.setup_menu", "setup.sh", "", "setup", True, ""),
 }

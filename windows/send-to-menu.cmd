@@ -1,6 +1,6 @@
 @echo off
 rem Optional: adds an entry to the Explorer "Send To" menu (right-click a recording ->
-rem Send To), pointing to drop-files-here.cmd, or removes it again.
+rem Send To), pointing to transcribe-recording.cmd (the window), or removes it again.
 rem   windows\send-to-menu.cmd add | remove | status
 rem Without an argument it asks. Only the tool's own shortcuts in your SendTo folder are touched.
 setlocal
