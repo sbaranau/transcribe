@@ -4,12 +4,12 @@ Private, local meeting transcription for Windows, macOS and Linux. Recordings an
 become a readable transcript with speakers and timestamps, optionally translated, checked and
 summarized.
 
-**Current release: v1.22** — single-file installers for Windows and macOS, while the full source
+**Current release: v1.23** — single-file installers for Windows and macOS, while the full source
 remains available for developers. See the
 [changelog](CHANGELOG.md).
 
-**[Download for Windows](https://github.com/sbaranau/transcribe/releases/download/v1.22/Live-Transcription-Windows-x64-v1.22-Setup.exe)** ·
-**[Download for macOS (Apple Silicon)](https://github.com/sbaranau/transcribe/releases/download/v1.22/Live-Transcription-macOS-Apple-Silicon-v1.22.dmg)** ·
+**[Download for Windows](https://github.com/sbaranau/transcribe/releases/download/v1.23/Live-Transcription-Windows-x64-v1.23-Setup.exe)** ·
+**[Download for macOS (Apple Silicon)](https://github.com/sbaranau/transcribe/releases/download/v1.23/Live-Transcription-macOS-Apple-Silicon-v1.23.dmg)** ·
 [All releases](https://github.com/sbaranau/transcribe/releases/latest) ·
 [User guide in Russian](ИНСТРУКЦИЯ.md)
 
@@ -48,7 +48,7 @@ work under allow. Tell the participants that a meeting is transcribed.
 ### Windows 10/11
 
 For a regular installation, download the single
-**[Live-Transcription-Windows-x64-v1.22-Setup.exe](https://github.com/sbaranau/transcribe/releases/download/v1.22/Live-Transcription-Windows-x64-v1.22-Setup.exe)**
+**[Live-Transcription-Windows-x64-v1.23-Setup.exe](https://github.com/sbaranau/transcribe/releases/download/v1.23/Live-Transcription-Windows-x64-v1.23-Setup.exe)**
 file (about 80 MB) and run it. It installs only for the current user, needs no administrator
 rights, and adds **Live Transcription** and **Transcribe a recording** to the Start menu. The
 installer optionally creates a desktop shortcut and an Explorer **Send to** entry.
@@ -89,7 +89,7 @@ models, CUDA libraries and preferences are intentionally kept for later installa
 ### macOS
 
 For a regular installation, download
-**[Live-Transcription-macOS-Apple-Silicon-v1.22.dmg](https://github.com/sbaranau/transcribe/releases/download/v1.22/Live-Transcription-macOS-Apple-Silicon-v1.22.dmg)**.
+**[Live-Transcription-macOS-Apple-Silicon-v1.23.dmg](https://github.com/sbaranau/transcribe/releases/download/v1.23/Live-Transcription-macOS-Apple-Silicon-v1.23.dmg)**.
 Open that one file and
 drag **Live Transcription** to **Applications**. On first start it downloads the speech models
 (about 1.7 GB) into Application Support. Models, translations and preferences remain there when

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.23 — 2026-11-16
 
 - Recordings made elsewhere are transcribed in the window instead of a console with numbered
   questions: a **Transcribe a recording…** button on the start screen, and the Transcribe a
