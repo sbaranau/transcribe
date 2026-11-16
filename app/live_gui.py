@@ -1369,12 +1369,21 @@ class App:
             self.run_button.pack_forget()
             self.cancel_button.configure(state="normal")
             self.cancel_button.pack(side="left", before=self.folder_button)
+            # The locked options are folded away, so the log below gets the room; only the
+            # file line (row 0), the buttons (14) and the progress (16) stay.
+            self.folded = [widget for widget in self.after_frame.grid_slaves()
+                           if int(widget.grid_info()["row"]) not in (0, 14, 16)]
+            for widget in self.folded:
+                widget.grid_remove()
             self.processing_panel.grid(row=16, column=0, columnspan=3, sticky="ew", pady=(12, 2))
             self.processing_progress.start(12)
         else:
             self.new_recording_button.configure(state="normal")
             self.processing_progress.stop()
             self.processing_panel.grid_remove()
+            for widget in getattr(self, "folded", []):
+                widget.grid()  # refresh_after below hides again what the choices do not need
+            self.folded = []
             self.cancel_button.pack_forget()
             self.run_button.pack(side="left", before=self.folder_button)
             for widget in (self.redo_box, self.summary_box, self.translate_box, self.path_entry, self.try_button,
@@ -1546,10 +1555,13 @@ class App:
                 elif kind == "ai":
                     self.show_ai(*data)
                 elif kind == "log":
+                    # Follows the new lines only while the end is in view, so the log can be
+                    # scrolled back and read while progress lines keep coming in.
+                    follow = self.at_end()
                     self.text.configure(state="normal")
                     self.text.insert("end", data + "\n", ("info",))
                     self.text.configure(state="disabled")
-                    self.text.see("end")
+                    self.after_insert(follow)
                 elif kind == "exported":
                     self.show_exported(data)
                 elif kind == "translated":
