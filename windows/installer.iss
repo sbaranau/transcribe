@@ -33,6 +33,12 @@ CloseApplications=yes
 RestartApplications=no
 VersionInfoVersion={#MyAppVersion}.0
 VersionInfoDescription=Live Transcription installer
+; Product name and version are the same in every build of a version: SignPath's signing policy
+; checks them (docs/SIGNING.md).
+VersionInfoProductName=Live Transcription
+VersionInfoProductVersion={#MyAppVersion}.0
+VersionInfoCompany=sbaranau
+VersionInfoCopyright=MIT License, sbaranau
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

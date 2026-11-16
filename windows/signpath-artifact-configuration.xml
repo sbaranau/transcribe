@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath artifact configuration for the Windows release (docs/SIGNING.md). Paste it into the
+  SignPath project as the artifact configuration; SignPath's editor validates it on saving.
+  The workflow uploads the installer with actions/upload-artifact, which zips it, so the root is a
+  zip file with the one installer inside. Product name and version are restricted, as SignPath
+  Foundation requires the same values in every build (windows/installer.iss sets them).
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="Live-Transcription-Windows-x64-v*-Setup.exe" product-name="Live Transcription">
+      <authenticode-sign/>
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

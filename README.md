@@ -167,11 +167,38 @@ windows\transcribe.cmd meeting.mp4 --language en --speakers 4 --translate de --s
 windows\transcribe.cmd --help
 ```
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by
+[SignPath Foundation](https://signpath.org) — applied for; until it is granted, the Windows
+installers are unsigned and Windows SmartScreen warns about them (see
+[Windows 10/11](#windows-1011)). The macOS DMG is not notarized by Apple.
+
+- Only the Windows installer built by this repository's GitHub Actions workflow
+  ([windows-release.yml](.github/workflows/windows-release.yml)) from a public release tag is
+  submitted for signing; nothing built elsewhere is signed.
+- Committers and reviewers: [sbaranau](https://github.com/sbaranau) (the only maintainer; changes
+  from anyone else are reviewed before they are merged).
+- Approvers: [sbaranau](https://github.com/sbaranau), who approves every signing request.
+- Every installer has the product name "Live Transcription" and the version of its release, and
+  can be removed in **Settings → Apps**.
+
+### Privacy
+
+This program does not transfer any information to other networked systems unless the person
+using it starts it, with these exceptions it states in the interface: on first start it downloads
+the speech models (Hugging Face, GitHub) and, on computers with an NVIDIA graphics card, the CUDA
+libraries (PyPI); it checks GitHub Releases for a newer version; and only when the user ticks an
+AI step (check, summary, translation check) it sends the transcript to the AI tool the user chose,
+under the user's own account, where that provider's privacy policy applies. Recordings,
+transcripts and translations otherwise stay on the computer.
+
 ## Documentation
 
 - [ИНСТРУКЦИЯ.md](ИНСТРУКЦИЯ.md): the full user guide (in Russian).
 - [docs/TECHNICAL.md](docs/TECHNICAL.md): how it works, what was measured, all options.
 - [docs/THIRD_PARTY.md](docs/THIRD_PARTY.md): the models and packages it uses, and their licenses.
+- [docs/SIGNING.md](docs/SIGNING.md): how the Windows installer gets signed and published to winget.
 
 ## License
 

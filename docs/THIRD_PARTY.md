@@ -4,6 +4,10 @@ This repository contains only the tool's own code (MIT, see [LICENSE](../LICENSE
 is included in it: the setup downloads the packages from PyPI and the models from Hugging Face and
 GitHub onto each computer, each under its own license.
 
+The Windows installer and the macOS DMG bundle Python 3.12 and the Python packages below, all
+under open-source licenses (MIT, BSD, Apache-2.0, PSF; FFmpeg inside PyAV under LGPL). They do
+not contain the models or the NVIDIA CUDA libraries: those are downloaded on first start.
+
 ## Models
 
 | Model | Used for | Source | License |
@@ -23,7 +27,7 @@ for the World", EAMT 2020; University of Helsinki, [Helsinki-NLP/Opus-MT](https:
 |---|---|---|
 | faster-whisper, CTranslate2 | running Whisper on the GPU or CPU | MIT |
 | PyAV (av) | reading audio and video files; its wheels bundle FFmpeg libraries (LGPL) | BSD-3-Clause |
-| nvidia-cublas-cu12, nvidia-cudnn-cu12 | CUDA libraries for the GPU | NVIDIA software license |
+| nvidia-cublas-cu12, nvidia-cudnn-cu12, nvidia-cuda-nvrtc-cu12 | CUDA libraries for the GPU; not in the Windows installer: downloaded from PyPI on first start, only on computers with an NVIDIA driver | NVIDIA software license |
 | sherpa-onnx | voice separation | Apache-2.0 |
 | onnxruntime | running the ONNX models | MIT |
 | tokenizers, huggingface-hub | translation tokenizer; model download | Apache-2.0 |

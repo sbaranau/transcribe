@@ -13,10 +13,13 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   installer:
     runs-on: windows-2025
+    outputs:
+      released: ${{ steps.release.outputs.released }}
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
@@ -27,11 +30,37 @@ jobs:
         shell: powershell
         run: ./windows/build-release.ps1
       - name: Keep a downloadable workflow artifact
+        id: unsigned
         uses: actions/upload-artifact@v6
         with:
           name: Live-Transcription-Windows-x64
           path: dist/*-Setup.exe
+      # Code signing by SignPath Foundation (docs/SIGNING.md). Off until the repository variable
+      # SIGNPATH_ORGANIZATION_ID is set; then every build waits here until the signing request
+      # is approved in SignPath, and the release gets the signed installer.
+      - name: Sign the installer (SignPath)
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: dist-signed
+      - name: Choose the installer to publish
+        shell: bash
+        run: |
+          if ls dist-signed/*-Setup.exe >/dev/null 2>&1; then
+            echo "INSTALLER_DIR=dist-signed" >> "$GITHUB_ENV"
+          else
+            echo "INSTALLER_DIR=dist" >> "$GITHUB_ENV"
+          fi
       - name: Add installer to GitHub Release
+        id: release
         if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
         shell: bash
         env:
@@ -39,10 +68,27 @@ jobs:
           RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" dist/*-Setup.exe --clobber
+            gh release upload "$RELEASE_TAG" "$INSTALLER_DIR"/*-Setup.exe --clobber
           elif [ -n "${{ inputs.release_tag }}" ]; then
             echo "Release $RELEASE_TAG does not exist" >&2
             exit 1
           else
-            gh release create "$RELEASE_TAG" dist/*-Setup.exe --generate-notes --title "$RELEASE_TAG"
+            gh release create "$RELEASE_TAG" "$INSTALLER_DIR"/*-Setup.exe --generate-notes --title "$RELEASE_TAG"
           fi
+          echo "released=true" >> "$GITHUB_OUTPUT"
+
+  # A new version in the winget catalog (docs/SIGNING.md). Part of this workflow, because a
+  # release made with the workflow token does not start other workflows. Off until the repository
+  # variable WINGET_ENABLED is "true"; the first version is submitted by hand with komac new.
+  winget:
+    needs: installer
+    if: startsWith(github.ref, 'refs/tags/v') && needs.installer.outputs.released == 'true' && vars.WINGET_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: sbaranau.LiveTranscription
+          installers-regex: '-Setup\.exe$'
+          release-tag: ${{ github.ref_name }}
+          max-versions-to-keep: 3
+          token: ${{ secrets.WINGET_TOKEN }}
