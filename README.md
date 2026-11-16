@@ -13,7 +13,7 @@ remains available for developers. See the
 [All releases](https://github.com/sbaranau/transcribe/releases/latest) ·
 [User guide in Russian](ИНСТРУКЦИЯ.md)
 
-![The live window during a call: the transcript on the left, its German translation on the right](docs/screenshots/2-live.png)
+![The home screen: two equal choices, Meeting now with a red Start button and Existing recording with a blue Choose file button, and the recent results below](docs/screenshots/1-home.png)
 
 ## What it does
 
@@ -139,10 +139,6 @@ is less tested. See the [technical description](docs/TECHNICAL.md#macos-and-linu
 
 The shortcut names follow the interface language. You can switch it at the top right of the
 window, or with `--ui-language en|de|ru`.
-
-<p>
-<img src="docs/screenshots/1-home.png" alt="The home screen on Windows: two equal cards, Meeting now with a red Start button and Existing recording with a blue Choose file button, and the recent results below" width="70%">
-</p>
 
 The live workflow has five explicit states: preparation, translation-model download, recording,
 finishing the last phrases, and creating results. The folder can be edited or chosen with the
