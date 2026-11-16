@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.24 — 2026-11-16
+
+- The AI options (text check, summary, translation check) are not offered when no AI is ready
+  on the computer. A panel says what to install and how to sign in (Claude Code, ChatGPT through
+  the Codex CLI, or a local model in Ollama or LM Studio), why an installed AI is not usable,
+  and has a Search again button. While AIs are looked for, these options wait greyed out.
+
 ## v1.23 — 2026-11-16
 
 - Recordings made elsewhere are transcribed in the window instead of a console with numbered
