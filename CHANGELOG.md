@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.26 — 2026-11-16
+
+- The processing log can be scrolled back and read while it runs: new lines follow only while
+  the end is in view, otherwise a To the end button appears.
+- During processing the locked options fold away, so the log gets most of the window; they
+  return when it ends or is stopped.
+
 ## v1.25 — 2026-11-16
 
 - The window opens on a home screen with two equal choices, "Meeting now" and "Existing
