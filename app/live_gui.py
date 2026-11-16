@@ -1,7 +1,10 @@
-"""The window of the live mode (live-transcribe), in the interface language (ui_text.py).
+"""The application window, in the interface language (ui_text.py).
 
-1. Before: interface language, meeting language, microphone and output devices, folder; the
-   model loads meanwhile. Changing the interface language rebuilds the window, keeping the model.
+0. Home: two equal ways in, "Meeting now" and "Existing recording", and the last results.
+   "Existing recording" (also the Transcribe a recording shortcut) goes straight to step 3 for
+   the chosen files. Changing the interface language rebuilds the window, keeping the model.
+1. Before (Meeting now, with Back): meeting language, translation, microphone and output
+   devices, folder; the model loads in the background from the start.
 2. During: recording light and timer, sound levels of the microphone and the computer, the text
    with timestamps (auto-scrolling unless you scrolled up), the unfinished phrase as a grey draft;
    with a translation chosen, the translation in a second column (translator.LiveTranslator);
@@ -17,6 +20,7 @@ window reads every 100 ms.
 import ctypes
 import gc
 import glob
+import json
 import os
 import queue
 import signal
@@ -105,24 +109,33 @@ class App:
         style.configure("Note.TLabel", foreground=GREY, font=(FONT, 9))
 
         self.build_header()
+        self.screen = None  # "home", "live" (its settings), then the recording and results
+        self.back_bar = ttk.Frame(self.root, padding=(14, 0, 14, 4))
+        ttk.Button(self.back_bar, text=t("win.back"), command=self.show_home).pack(side="left")
+        self.home_frame = self.build_home()
         self.setup_frame = self.build_setup()
         self.meters_frame = self.build_meters()
         self.text_frame = self.build_text()
         self.controls_frame = self.build_controls()
         self.after_frame = None
-        self.setup_frame.pack(fill="x", padx=14, pady=(0, 8))
-        self.text_frame.pack(fill="both", expand=True, padx=14, pady=(0, 8))
 
+        # Which screen a rebuilt window of this process opens (new recording, language change).
+        start_screen = getattr(args, "start_screen", "home")
+        args.start_screen = "home"
         if loaded:
             self.events.put(("model", (*loaded, "")))
         elif args.files:
             # Started to transcribe recordings (shortcut, Send to): the processing loads its own
-            # model, so none is loaded here unless the file dialog is cancelled. Only once: a
-            # later window of this process (Back to start) is the normal recording screen.
+            # model, so none is loaded here. Only once: a later window of this process opens
+            # the home screen.
             args.files, inputs, args.inputs = False, list(args.inputs), []
+            self.show_home()
             root.after(150, lambda: self.open_files(inputs or self.ask_files()))
         else:
+            # Loaded meanwhile, so a meeting can start right away; dropped if a file is chosen.
             self.start_model_loading()
+        if not args.files and self.screen is None:
+            self.show_live_setup() if start_screen == "live" else self.show_home()
         if os.environ.get("TRANSCRIBE_CHECK_UPDATES") == "1":
             threading.Thread(target=self.check_update, args=(False,), daemon=True).start()
         root.after(100, self.poll)
@@ -169,7 +182,7 @@ class App:
         self.interface_box = ttk.Frame(bar)
         self.interface_box.pack(side="right")
         ttk.Label(self.interface_box, text=t("win.interface"), style="Note.TLabel").pack(side="left", padx=(0, 6))
-        self.interface = ttk.Combobox(self.interface_box, state="disabled", width=10,
+        self.interface = ttk.Combobox(self.interface_box, state="readonly", width=10,
                                       values=list(ui_text.LANGUAGES.values()))
         self.interface.current(list(ui_text.LANGUAGES).index(ui_text.language()))
         self.interface.bind("<<ComboboxSelected>>", self.change_interface)
@@ -310,14 +323,78 @@ class App:
         self.start_button.bind("<Leave>", lambda _event: self.start_button.configure(
             background="#e32636") if self.start_enabled else None)
         self.start_button.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(10, 2))
-        # A recording made elsewhere goes through the same processing as one made here.
-        file_line = ttk.Frame(frame)
-        file_line.grid(row=9, column=0, columnspan=2, sticky="w", pady=(10, 0))
-        ttk.Button(file_line, text=t("win.transcribe_file"), style="Big.TButton",
-                   command=lambda: self.open_files(self.ask_files())).pack(side="left")
-        ttk.Label(file_line, text=t("win.transcribe_file_note"), style="Note.TLabel").pack(
-            side="left", padx=(10, 0))
         return frame
+
+    # --- home screen ------------------------------------------------------------------------------
+
+    def build_home(self) -> ttk.Frame:
+        """Two equal ways in, so neither hides behind the other: a meeting now, or a recording
+        made earlier. Below them the last results, to find a transcript again."""
+        frame = ttk.Frame(self.root, padding=(14, 8, 14, 10))
+        cards = ttk.Frame(frame)
+        cards.pack(fill="x")
+        cards.columnconfigure((0, 1), weight=1, uniform="card")
+        self.home_images = []
+        specs = [("live", "home.live_title", "home.live_text", "home.live_button",
+                  ("#e32636", "#c51f30"), self.show_live_setup),
+                 ("transcribe", "home.file_title", "home.file_text", "home.file_button",
+                  ("#1f6fc5", "#195ba3"), lambda: self.open_files(self.ask_files()))]
+        for column, (icon, title, text, button, colours, command) in enumerate(specs):
+            card = tk.Frame(cards, background="white", highlightbackground="#cfcfcf",
+                            highlightthickness=1, padx=18, pady=16)
+            card.grid(row=0, column=column, sticky="nsew", padx=(0, 6) if column == 0 else (6, 0))
+            try:
+                image = tk.PhotoImage(file=os.path.join(ICONS, icon + ".png")).subsample(4)
+                self.home_images.append(image)
+                tk.Label(card, image=image, background="white").pack(pady=(2, 8))
+            except tk.TclError:
+                pass  # no picture is no reason not to start
+            tk.Label(card, text=t(title), font=(FONT, 16, "bold"), background="white",
+                     foreground="#1f1f1f").pack()
+            # Three lines in both cards, so their buttons stay level in every language.
+            tk.Label(card, text=t(text), font=(FONT, 10), background="white", foreground=GREY,
+                     wraplength=330, justify="center", height=3, anchor="n").pack(pady=(6, 12))
+            primary_label(card, t(button), colours, command, size=13).pack(fill="x")
+        self.recent_frame = ttk.Frame(frame)
+        self.recent_frame.pack(fill="x", pady=(18, 0))
+        return frame
+
+    def refresh_recent(self) -> None:
+        for child in self.recent_frame.winfo_children():
+            child.destroy()
+        items = load_recent()
+        if not items:
+            return
+        ttk.Label(self.recent_frame, text=t("home.recent"), style="Note.TLabel").pack(anchor="w", pady=(0, 4))
+        for item in items:
+            line = ttk.Frame(self.recent_frame)
+            line.pack(anchor="w", pady=1)
+            link = tk.Label(line, text=item["name"], font=(FONT, 10, "underline"), foreground="#1565c0",
+                            cursor="hand2")
+            link.bind("<Button-1>", lambda _event, folder=item["folder"]: tool.open_path(folder))
+            link.pack(side="left")
+            kind = t("home.kind_live") if item.get("kind") == "live" else t("home.kind_file")
+            ttk.Label(line, text=f"  {kind} · {item.get('date', '')}", style="Note.TLabel").pack(side="left")
+
+    def show_home(self) -> None:
+        self.screen = "home"
+        for widget in (self.back_bar, self.setup_frame, self.text_frame):
+            widget.pack_forget()
+        self.status.configure(text="")
+        self.refresh_recent()
+        self.home_frame.pack(fill="both", expand=True)
+
+    def show_live_setup(self) -> None:
+        self.screen = "live"
+        self.home_frame.pack_forget()
+        self.back_bar.pack(fill="x")
+        self.setup_frame.pack(fill="x", padx=14, pady=(0, 8))
+        if self.model is None and not self.model_loading:
+            self.start_model_loading()
+        if self.model is not None:
+            self.status.configure(text=t("win.ready"), foreground=GREEN)
+        else:
+            self.status.configure(text=t("win.loading"), foreground=GREY)
 
     # --- recordings made elsewhere ----------------------------------------------------------------
 
@@ -332,9 +409,7 @@ class App:
         """Shows the processing panel for recordings (or .txt transcripts) made elsewhere."""
         files = [path for path in files if os.path.isfile(path)]
         if not files:
-            if self.files is None and self.model is None and not self.model_loading:
-                self.start_model_loading()  # dialog cancelled at start: the recording screen
-            return
+            return  # dialog cancelled: the screen behind it (home) stays
         if self.processing:
             return
         self.files = files
@@ -480,20 +555,24 @@ class App:
 
     def change_interface(self, _event=None) -> None:
         code = list(ui_text.LANGUAGES)[self.interface.current()]
-        if code == ui_text.language() or self.model is None:
+        if code == ui_text.language():
             return
         ui_text.set_language(code)
         ui_text.save_language(code)
         self.save_ui_settings(self.chosen_settings())  # the new window offers the same choices
         import shortcuts
         threading.Thread(target=shortcuts.rename_existing, daemon=True).start()
-        self.restart = (self.model, self.hotwords)
+        # The rebuilt window opens the same screen and keeps a model already loaded.
+        self.args.start_screen = "live" if self.screen == "live" else "home"
+        self.restart = (self.model, self.hotwords) if self.model is not None else True
         self.root.destroy()
 
     def new_recording(self) -> None:
-        """Return to a clean recording screen without ending the application process."""
+        """After a meeting: a clean recording screen; after a recording made elsewhere: the home
+        screen. Without ending the application process."""
         if self.processing:
             return
+        self.args.start_screen = "home" if self.files is not None else "live"
         self.restart = True
         self.root.destroy()
 
@@ -672,6 +751,8 @@ class App:
         except Exception as error:
             messagebox.showerror(t("win.start_failed"), str(error))
             return
+        self.screen = "recording"
+        self.back_bar.pack_forget()
         self.setup_frame.pack_forget()
         self.tools_frame.pack_forget()
         self.interface_box.pack_forget()  # the interface language is chosen before the recording
@@ -911,6 +992,9 @@ class App:
         self.stopping_overlay.place_forget()
         file_mode = self.files is not None
         media = [path for path in self.files if not path.lower().endswith(".txt")] if file_mode else []
+        self.screen = "results"
+        self.home_frame.pack_forget()
+        self.back_bar.pack_forget()
         self.setup_frame.pack_forget()
         self.meters_frame.pack_forget()
         self.interface_box.pack_forget()
@@ -925,6 +1009,8 @@ class App:
             seconds = self.session.seconds
             self.status.configure(text=t("win.stopped", length=tool.format_clock(seconds)), foreground=GREEN)
             self.model = self.session.model = None
+            folder = os.path.dirname(self.session.wav_path)
+            add_recent("live", os.path.basename(folder), folder)
         self.timer.configure(text="")
         gc.collect()
 
@@ -1406,6 +1492,8 @@ class App:
                 self.result_buttons.pack(anchor="w")
                 ttk.Button(self.result_buttons, text=label,
                            command=lambda p=result: tool.open_path(p)).pack(side="left", padx=(0, 6))
+            if shown:
+                add_recent("file", os.path.basename(path), os.path.dirname(base))
         first_folder = os.path.dirname(self.file_base(self.files[0]))
         if os.path.isdir(first_folder):
             self.folder = first_folder
@@ -1421,7 +1509,8 @@ class App:
                     if self.files is not None:
                         continue  # a recording was chosen meanwhile; its processing loads its own
                     self.model, self.hotwords, note = data
-                    self.status.configure(text=t("win.ready"), foreground=GREEN)
+                    if self.screen == "live":  # the home screen has no use for it
+                        self.status.configure(text=t("win.ready"), foreground=GREEN)
                     self.refresh_start_button()
                     self.interface.configure(state="readonly")
                     self.prepare_translation()
@@ -1539,6 +1628,43 @@ def stop_process_tree(process: subprocess.Popen) -> None:
             os.killpg(process.pid, signal.SIGTERM)
     except (OSError, subprocess.SubprocessError):
         process.kill()
+
+
+def primary_label(parent, text: str, colours: tuple[str, str], command, size: int = 13) -> tk.Label:
+    """A coloured primary action. Aqua ignores custom colours on buttons, so it is a focusable
+    label that reacts to the mouse, Return and Space."""
+    normal, hover = colours
+    label = tk.Label(parent, text=text, font=(FONT, size, "bold"), background=normal, foreground="white",
+                     padx=20, pady=9, cursor="hand2", takefocus=True)
+    for sequence in ("<Button-1>", "<Return>", "<space>"):
+        label.bind(sequence, lambda _event: command())
+    label.bind("<Enter>", lambda _event: label.configure(background=hover))
+    label.bind("<Leave>", lambda _event: label.configure(background=normal))
+    return label
+
+
+# The home screen's recent results: only names and folder paths of this computer, never content.
+RECENT_FILE = paths.config("recent.local.json")
+RECENT_COUNT = 5
+
+
+def load_recent() -> list[dict]:
+    try:
+        with open(RECENT_FILE, encoding="utf-8") as source:
+            items = json.load(source)
+    except (OSError, ValueError):
+        return []
+    return [item for item in items if isinstance(item, dict) and os.path.isdir(item.get("folder", ""))][:RECENT_COUNT]
+
+
+def add_recent(kind: str, name: str, folder: str) -> None:
+    items = [item for item in load_recent() if os.path.normcase(item["folder"]) != os.path.normcase(folder)]
+    items.insert(0, {"kind": kind, "name": name, "folder": folder, "date": time.strftime("%d.%m.%Y %H:%M")})
+    try:
+        with open(RECENT_FILE, "w", encoding="utf-8") as out:
+            json.dump(items[:RECENT_COUNT], out, ensure_ascii=False, indent=1)
+    except OSError:
+        pass  # only a convenience
 
 
 def set_icon(root: tk.Tk, recording: bool = False) -> None:

@@ -82,21 +82,21 @@ TEXTS = {
 
     # --- finding the AI -------------------------------------------------------------------------
     "ai.searching_console": (
-        "\nLooking for installed AIs (Claude Code, Codex (ChatGPT), local models in Ollama and "
-        "LM Studio) and checking the login...",
-        "\nSuche installierte KIs (Claude Code, Codex (ChatGPT), lokale Modelle in Ollama und "
-        "LM Studio) und prüfe die Anmeldung...",
-        "\nИщу установленные ИИ (Claude Code, Codex (ChatGPT), локальные модели Ollama и "
-        "LM Studio) и проверяю, выполнен ли в них вход..."),
+        "\nLooking for installed AIs (Claude Code, Codex (ChatGPT), Gemini CLI, Copilot CLI, Qwen "
+        "Code, local models in Ollama, LM Studio, Jan and others) and checking the login...",
+        "\nSuche installierte KIs (Claude Code, Codex (ChatGPT), Gemini CLI, Copilot CLI, Qwen "
+        "Code, lokale Modelle in Ollama, LM Studio, Jan u. a.) und prüfe die Anmeldung...",
+        "\nИщу установленные ИИ (Claude Code, Codex (ChatGPT), Gemini CLI, Copilot CLI, Qwen "
+        "Code, локальные модели Ollama, LM Studio, Jan и др.) и проверяю, выполнен ли в них вход..."),
     "ai.installed_but": ("{title}: installed, but {reason}", "{title}: installiert, aber {reason}",
                          "{title}: установлен, но {reason}"),
     "ai.nothing": ("nothing", "nichts", "ничего"),
     "ai.ready": ("Ready ({seconds} s): {names}.", "Bereit ({seconds} s): {names}.",
                  "Готово к работе ({seconds} с): {names}."),
     "ai.which": ("Which AI should be used?", "Welche KI soll verwendet werden?", "Какой ИИ использовать?"),
-    "ai.none_found": ("\nNo Claude Code, no Codex (ChatGPT) and no local model (Ollama, LM Studio) found.",
-                      "\nWeder Claude Code noch Codex (ChatGPT) noch ein lokales Modell (Ollama, LM Studio) gefunden.",
-                      "\nНе найден ни Claude Code, ни Codex (ChatGPT), ни локальная модель (Ollama, LM Studio)."),
+    "ai.none_found": ("\nNo AI found: neither Claude Code, Codex (ChatGPT), Gemini CLI, Copilot CLI, Qwen Code nor a local model.",
+                      "\nKeine KI gefunden: weder Claude Code, Codex (ChatGPT), Gemini CLI, Copilot CLI, Qwen Code noch ein lokales Modell.",
+                      "\nИИ не найден: нет ни Claude Code, ни Codex (ChatGPT), ни Gemini CLI, ни Copilot CLI, ни Qwen Code, ни локальной модели."),
     "ai.what_now": ("What now?", "Was nun?", "Что сделать?"),
     "ai.option_skip": ("1 - skip the check and the summary (the text is made anyway)",
                        "1 - Prüfung und Zusammenfassung auslassen (der Text entsteht trotzdem)",
@@ -104,19 +104,19 @@ TEXTS = {
     "ai.option_path": ("2 - enter the path to an installed AI", "2 - Pfad zu einer installierten KI angeben",
                        "2 - указать путь к установленному ИИ"),
     "ai.skip": ("skip", "auslassen", "отменить"),
-    "ai.path_prompt": ("Path to claude or codex (or its folder), or the address of a local server,\n"
+    "ai.path_prompt": ("Path to claude, codex, gemini, copilot or qwen (or its folder), or the address of a local server,\n"
                        "for example http://127.0.0.1:11434:",
-                       "Pfad zu claude oder codex (oder dessen Ordner) oder die Adresse eines lokalen Servers,\n"
+                       "Pfad zu claude, codex, gemini, copilot oder qwen (oder dessen Ordner) oder die Adresse eines lokalen Servers,\n"
                        "zum Beispiel http://127.0.0.1:11434:",
-                       "Путь к claude или codex (можно папку с ним), или адрес локального сервера,\n"
+                       "Путь к claude, codex, gemini, copilot или qwen (можно папку с ним), или адрес локального сервера,\n"
                        "например http://127.0.0.1:11434:"),
     "ai.found_but": ("  Found, but {reason}.", "  Gefunden, aber {reason}.", "  Найден, но {reason}."),
     "ai.found_saved": ("Found: {name}. The path is remembered for next time.",
                        "Gefunden: {name}. Der Pfad wird für die nächsten Male gespeichert.",
                        "Найдено: {name}. Путь запомнен для следующих запусков."),
-    "ai.path_wrong": ("  Neither claude nor codex at this path, and no local server answers there.",
-                      "  Unter diesem Pfad gibt es weder claude noch codex, und kein lokaler Server antwortet.",
-                      "  По этому пути не нашёлся ни claude, ни codex, и локальный сервер не отвечает."),
+    "ai.path_wrong": ("  No known AI tool at this path, and no local server answers there.",
+                      "  Unter diesem Pfad gibt es kein bekanntes KI-Werkzeug, und kein lokaler Server antwortet.",
+                      "  По этому пути не нашлось известного ИИ, и локальный сервер не отвечает."),
     "ai.local": ("local model", "lokales Modell", "локальная модель"),
     "login.server": ("the server does not answer", "der Server antwortet nicht", "сервер не отвечает"),
     "login.old_claude": ("login not checked (old version of Claude Code)",
@@ -127,6 +127,15 @@ TEXTS = {
                      "вход не выполнен: запустите claude и войдите (/login)"),
     "login.codex": ("not logged in: run codex login", "nicht angemeldet: codex login ausführen",
                     "вход не выполнен: выполните codex login"),
+    "login.gemini": ("Gemini CLI: if it is not logged in, start gemini and choose Sign in with Google",
+                     "Gemini CLI: falls nicht angemeldet, gemini starten und Sign in with Google wählen",
+                     "Gemini CLI: если вход не выполнен, запустите gemini и выберите Sign in with Google"),
+    "login.copilot": ("Copilot CLI: if it is not logged in, run copilot login (needs a Copilot subscription)",
+                      "Copilot CLI: falls nicht angemeldet, copilot login ausführen (braucht ein Copilot-Abo)",
+                      "Copilot CLI: если вход не выполнен, выполните copilot login (нужна подписка Copilot)"),
+    "login.qwen": ("Qwen Code: if it is not logged in, start qwen and run /auth",
+                   "Qwen Code: falls nicht angemeldet, qwen starten und /auth ausführen",
+                   "Qwen Code: если вход не выполнен, запустите qwen и выполните /auth"),
     "login.unknown": ("login not checked", "Anmeldung nicht geprüft", "вход не проверен"),
 
     # --- live mode in the console ---------------------------------------------------------------
@@ -332,11 +341,11 @@ TEXTS = {
     "win.searching": ("Looking for installed AIs and checking the login...",
                       "Suche installierte KIs und prüfe die Anmeldung...",
                       "Ищу установленные ИИ и проверяю вход..."),
-    "win.path": ("Path to claude or codex (or their folder), or the address of a local server, "
+    "win.path": ("Path to claude, codex, gemini, copilot or qwen (or their folder), or the address of a local server, "
                  "for example http://127.0.0.1:11434:",
-                 "Pfad zu claude oder codex (oder deren Ordner) oder die Adresse eines lokalen Servers, "
+                 "Pfad zu claude, codex, gemini, copilot oder qwen (oder deren Ordner) oder die Adresse eines lokalen Servers, "
                  "zum Beispiel http://127.0.0.1:11434:",
-                 "Путь к claude или codex (или к их папке), или адрес локального сервера, "
+                 "Путь к claude, codex, gemini, copilot или qwen (или к их папке), или адрес локального сервера, "
                  "например http://127.0.0.1:11434:"),
     "win.try_path": ("Check", "Prüfen", "Проверить"),
     "win.ai_rules": ("The text goes to the chosen AI under your account (a local model keeps it on the "
@@ -350,11 +359,21 @@ TEXTS = {
                          "Удалить звук встречи (meeting.wav) после обработки"),
     "win.run": ("Create results", "Ergebnisse erstellen", "Выполнить расшифровку"),
     # --- a recording made elsewhere (Teams, Zoom, phone, ...) ------------------------------------
-    "win.transcribe_file": ("📂  Transcribe a recording…", "📂  Aufnahme transkribieren…",
-                            "📂  Расшифровать запись…"),
-    "win.transcribe_file_note": ("An audio or video file you already have, or a .txt transcript",
-                                 "Eine vorhandene Audio- oder Videodatei oder ein .txt-Transkript",
-                                 "Готовый аудио- или видеофайл либо расшифровка .txt"),
+    # --- home screen: the two ways in -------------------------------------------------------------
+    "home.live_title": ("Meeting now", "Besprechung jetzt", "Встреча сейчас"),
+    "home.live_text": ("The text appears during the call in Teams, Zoom or a meeting room.",
+                       "Der Text erscheint während des Gesprächs in Teams, Zoom oder im Raum.",
+                       "Текст появляется прямо во время созвона в Teams, Zoom или в переговорной."),
+    "home.live_button": ("Start", "Starten", "Начать"),
+    "home.file_title": ("Existing recording", "Vorhandene Aufnahme", "Готовая запись"),
+    "home.file_text": ("An audio or video file recorded earlier, or a .txt transcript.",
+                       "Eine früher aufgenommene Audio- oder Videodatei oder ein .txt-Transkript.",
+                       "Аудио- или видеофайл, записанный раньше, либо расшифровка .txt."),
+    "home.file_button": ("Choose file…", "Datei wählen…", "Выбрать файл…"),
+    "home.recent": ("RECENT RESULTS", "LETZTE ERGEBNISSE", "НЕДАВНИЕ РЕЗУЛЬТАТЫ"),
+    "home.kind_live": ("meeting", "Besprechung", "встреча"),
+    "home.kind_file": ("recording", "Aufnahme", "запись"),
+    "win.back": ("←  Back", "←  Zurück", "←  Назад"),
     "win.pick_title": ("Choose recordings to transcribe", "Aufnahmen zum Transkribieren wählen",
                        "Выберите записи для расшифровки"),
     "win.media_files": ("Recordings and transcripts", "Aufnahmen und Transkripte", "Записи и расшифровки"),
@@ -394,19 +413,23 @@ TEXTS = {
                  "Ещё проверяю, какие ИИ установлены и где выполнен вход. Это несколько секунд."),
     "win.no_ai_install": (
         "The text check, the summary and the translation check need an AI, and none is ready on this "
-        "computer. To use them, install one and sign in: Claude Code (run claude, then /login), ChatGPT "
-        "through the Codex CLI (codex login), or a local model in Ollama or LM Studio. Then press "
-        "Search again. Transcription, speakers and translation work without an AI.",
+        "computer. To use them, install one and sign in with your account: Claude Code (claude, then "
+        "/login), ChatGPT through the Codex CLI (codex login), Gemini CLI (gemini, Sign in with Google), "
+        "GitHub Copilot CLI (copilot login) or Qwen Code (qwen, then /auth); or start a local model in "
+        "Ollama, LM Studio, Jan or GPT4All. Then press Search again. Transcription, speakers and "
+        "translation work without an AI.",
         "Textprüfung, Zusammenfassung und Übersetzungsprüfung brauchen eine KI, und auf diesem Computer "
-        "ist keine einsatzbereit. Installieren Sie eine und melden Sie sich an: Claude Code (claude "
-        "starten, dann /login), ChatGPT über die Codex CLI (codex login) oder ein lokales Modell in "
-        "Ollama oder LM Studio. Dann auf Erneut suchen klicken. Transkription, Sprecher und Übersetzung "
-        "funktionieren auch ohne KI.",
+        "ist keine einsatzbereit. Installieren Sie eine und melden Sie sich mit Ihrem Konto an: Claude "
+        "Code (claude, dann /login), ChatGPT über die Codex CLI (codex login), Gemini CLI (gemini, Sign "
+        "in with Google), GitHub Copilot CLI (copilot login) oder Qwen Code (qwen, dann /auth); oder "
+        "starten Sie ein lokales Modell in Ollama, LM Studio, Jan oder GPT4All. Dann auf Erneut suchen "
+        "klicken. Transkription, Sprecher und Übersetzung funktionieren auch ohne KI.",
         "Проверка текста, выжимка и проверка перевода делаются с помощью ИИ, а на этом компьютере нет "
-        "ни одного готового к работе. Чтобы они появились, установите один из них и войдите: Claude Code "
-        "(запустите claude, затем /login), ChatGPT через Codex CLI (codex login) или локальную модель в "
-        "Ollama либо LM Studio. Затем нажмите «Искать снова». Расшифровка, разделение по говорящим и "
-        "перевод работают и без ИИ."),
+        "ни одного готового к работе. Чтобы они появились, установите один из них и войдите своим "
+        "аккаунтом: Claude Code (claude, затем /login), ChatGPT через Codex CLI (codex login), Gemini CLI "
+        "(gemini, Sign in with Google), GitHub Copilot CLI (copilot login) или Qwen Code (qwen, затем "
+        "/auth); либо запустите локальную модель в Ollama, LM Studio, Jan или GPT4All. Затем нажмите "
+        "«Искать снова». Расшифровка, разделение по говорящим и перевод работают и без ИИ."),
     "win.search_again": ("Search again", "Erneut suchen", "Искать снова"),
     "win.no_ai_title": ("No AI", "Keine KI", "Нет ИИ"),
     "win.no_ai_text": ("The check and the summary need an AI: enter a path or uncheck them.",

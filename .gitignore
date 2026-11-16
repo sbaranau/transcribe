@@ -19,6 +19,8 @@ __pycache__/
 
 # Local settings: where the AI was found, the window's last language and microphone.
 *.local.ini
+# The home screen's recent results (folder paths of this computer).
+*.local.json
 
 # Shortcuts with icons, made by windows\setup.cmd (they hold absolute paths).
 /*.lnk
