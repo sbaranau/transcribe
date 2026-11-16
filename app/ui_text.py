@@ -392,6 +392,22 @@ TEXTS = {
     "win.wait": ("Still checking which AIs are installed and logged in. This takes a few seconds.",
                  "Prüfe noch, welche KIs installiert und angemeldet sind. Das dauert ein paar Sekunden.",
                  "Ещё проверяю, какие ИИ установлены и где выполнен вход. Это несколько секунд."),
+    "win.no_ai_install": (
+        "The text check, the summary and the translation check need an AI, and none is ready on this "
+        "computer. To use them, install one and sign in: Claude Code (run claude, then /login), ChatGPT "
+        "through the Codex CLI (codex login), or a local model in Ollama or LM Studio. Then press "
+        "Search again. Transcription, speakers and translation work without an AI.",
+        "Textprüfung, Zusammenfassung und Übersetzungsprüfung brauchen eine KI, und auf diesem Computer "
+        "ist keine einsatzbereit. Installieren Sie eine und melden Sie sich an: Claude Code (claude "
+        "starten, dann /login), ChatGPT über die Codex CLI (codex login) oder ein lokales Modell in "
+        "Ollama oder LM Studio. Dann auf Erneut suchen klicken. Transkription, Sprecher und Übersetzung "
+        "funktionieren auch ohne KI.",
+        "Проверка текста, выжимка и проверка перевода делаются с помощью ИИ, а на этом компьютере нет "
+        "ни одного готового к работе. Чтобы они появились, установите один из них и войдите: Claude Code "
+        "(запустите claude, затем /login), ChatGPT через Codex CLI (codex login) или локальную модель в "
+        "Ollama либо LM Studio. Затем нажмите «Искать снова». Расшифровка, разделение по говорящим и "
+        "перевод работают и без ИИ."),
+    "win.search_again": ("Search again", "Erneut suchen", "Искать снова"),
     "win.no_ai_title": ("No AI", "Keine KI", "Нет ИИ"),
     "win.no_ai_text": ("The check and the summary need an AI: enter a path or uncheck them.",
                        "Prüfung und Zusammenfassung brauchen eine KI: Pfad angeben oder die Häkchen entfernen.",

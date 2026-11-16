@@ -1054,6 +1054,16 @@ class App:
         self.try_button.pack(side="left", padx=6)
         self.ai_warning = ttk.Label(frame, foreground=RED, wraplength=760, text=t("win.ai_rules"))
         self.ai_warning.grid(row=12, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=(2, 4))
+        # Without any usable AI its options are hidden; this says what to install instead.
+        self.ai_state = "searching"  # then "ready" or "none"
+        self.no_ai_panel = tk.Frame(frame, background="#fff3c4", padx=10, pady=8)
+        tk.Label(self.no_ai_panel, text=t("win.no_ai_install"), background="#fff3c4", foreground="#5d4300",
+                 font=(FONT, 10), justify="left", anchor="w", wraplength=740).pack(anchor="w", fill="x")
+        self.no_ai_reasons = tk.Label(self.no_ai_panel, background="#fff3c4", foreground="#5d4300",
+                                      font=(FONT, 9), justify="left", anchor="w", wraplength=740)
+        self.search_again_button = ttk.Button(self.no_ai_panel, text=t("win.search_again"),
+                                              command=self.search_ai)
+        self.search_again_button.pack(anchor="w", pady=(6, 0), side="bottom")
 
         self.delete_box = ttk.Checkbutton(frame, text=t("win.delete_sound"), variable=self.delete_sound)
         if not file_mode:  # someone else's recording is never deleted from here
@@ -1089,6 +1099,13 @@ class App:
         self.processing_progress = ttk.Progressbar(self.processing_panel, mode="indeterminate", length=520)
         self.processing_progress.pack(fill="x")
         self.refresh_export()
+        self.search_ai()
+
+    def search_ai(self) -> None:
+        """Looks for installed and logged-in AIs in the background (also "Search again")."""
+        self.ai_state = "searching"
+        self.ai_note.configure(text=t("win.searching"))
+        self.search_again_button.configure(state="disabled")
         self.refresh_after()
         threading.Thread(target=lambda: self.events.put(
             ("ai", ai_engines.verify_engines(ai_engines.find_engines()))), daemon=True).start()
@@ -1099,23 +1116,38 @@ class App:
         redo = self.redo.get()
         self.split_box.configure(state="normal" if redo else "disabled")
         self.count_box.configure(state="normal" if redo and self.split.get() else "disabled")
+        # The AI options are usable only with an AI ready; while it is looked for they wait greyed
+        # out, and when there is none they are not offered at all (no_ai_panel says what to do).
+        ai_ready = self.ai_state == "ready"
         can_check = redo and (self.split.get() or getattr(self, "is_call", False))
-        if not can_check:
+        if not (can_check and ai_ready):
             self.check.set(False)
-        self.check_box.configure(state="normal" if can_check else "disabled")
+        self.check_box.configure(state="normal" if can_check and ai_ready else "disabled")
         translate = self.translate.get()
         self.after_target.configure(state="readonly" if translate else "disabled")
-        if not translate:
+        if not (translate and ai_ready):
             self.check_translation.set(False)
-        self.check_translation_box.configure(state="normal" if translate else "disabled")
+        self.check_translation_box.configure(state="normal" if translate and ai_ready else "disabled")
+        if not ai_ready:
+            self.summary.set(False)
+        self.summary_box.configure(state="normal" if ai_ready else "disabled")
+        for box in (self.check_box, self.check_translation_box, self.summary_box):
+            box.grid_remove() if self.ai_state == "none" else box.grid()
+        if self.ai_state == "none":
+            self.no_ai_panel.grid(row=9, column=0, columnspan=3, sticky="ew", pady=(8, 2))
+        else:
+            self.no_ai_panel.grid_remove()
         needs_ai = self.check.get() or self.summary.get() or self.check_translation.get()
-        for widget in (self.ai_row, self.ai_note, self.ai_warning):
-            if needs_ai and (widget is not self.ai_note or widget.cget("text")):
-                widget.grid()
-            else:
-                widget.grid_remove()
-        if needs_ai and not self.found_ai and self.ai_note.cget("text") != t("win.searching"):
-            self.path_row.grid(row=11, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=2)
+        searching = self.ai_state == "searching"
+        for widget in (self.ai_row, self.ai_warning):
+            widget.grid() if needs_ai else widget.grid_remove()
+        # "Looking for AIs..." while searching; afterwards the notes (installed, not logged in).
+        if searching or (needs_ai and self.ai_note.cget("text")):
+            self.ai_note.grid()
+        else:
+            self.ai_note.grid_remove()
+        if self.ai_state == "none":
+            self.path_row.grid(row=11, column=0, columnspan=3, sticky="w", padx=(10, 0), pady=(2, 4))
         else:
             self.path_row.grid_remove()
 
@@ -1127,11 +1159,19 @@ class App:
         self.ai_choice.configure(values=[ai_engines.describe(e, found[e]) for e in self.ai_keys],
                                  state="readonly" if found and not self.processing else "disabled")
         notes = [t("ai.installed_but", title=ai_engines.title(e), reason=reason) for e, reason in left_out.items()]
+        self.ai_state = "ready" if found else "none"
+        self.search_again_button.configure(state="normal")
         if found:
             self.ai_choice.current(0)
+            self.ai_note.configure(text="\n".join(notes))
         else:
-            notes.insert(0, t("win.no_ai"))
-        self.ai_note.configure(text="\n".join(notes))
+            # Installed but not logged in, for example: said in the panel, where it helps.
+            self.ai_note.configure(text="")
+            self.no_ai_reasons.configure(text="\n".join(notes))
+            if notes:
+                self.no_ai_reasons.pack(anchor="w", fill="x", pady=(6, 0))
+            else:
+                self.no_ai_reasons.pack_forget()
         self.refresh_after()
 
     def try_path(self) -> None:
@@ -1235,6 +1275,7 @@ class App:
                            self.translate_box, self.after_target, self.check_translation_box,
                            self.ai_choice, self.path_entry, self.try_button, self.delete_box):
                 widget.configure(state="disabled")
+            self.search_again_button.configure(state="disabled")
             if self.files is not None:
                 self.change_files_button.configure(state="disabled")
                 if self.file_language:
@@ -1254,6 +1295,8 @@ class App:
                            self.delete_box):
                 widget.configure(state="normal")
             self.ai_choice.configure(state="readonly" if self.found_ai else "disabled")
+            if self.ai_state != "searching":
+                self.search_again_button.configure(state="normal")
             if self.files is not None:
                 self.change_files_button.configure(state="normal")
                 if self.file_language:
