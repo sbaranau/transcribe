@@ -49,11 +49,21 @@ work under allow. Tell the participants that a meeting is transcribed.
 
 For a regular installation, download the single
 **[Live-Transcription-Windows-x64-v1.22-Setup.exe](https://github.com/sbaranau/transcribe/releases/download/v1.22/Live-Transcription-Windows-x64-v1.22-Setup.exe)**
-file and run it. It installs only for the current user, needs no administrator rights, and adds
-**Live Transcription** and **Transcribe a recording** to the Start menu. On first start it downloads
-the speech models (about 1.7 GB) into `%LOCALAPPDATA%\Live Transcription`; models and preferences
-remain there when the application is updated. The installer optionally creates a desktop shortcut
-and an Explorer **Send to** entry.
+file (about 80 MB) and run it. It installs only for the current user, needs no administrator
+rights, and adds **Live Transcription** and **Transcribe a recording** to the Start menu. The
+installer optionally creates a desktop shortcut and an Explorer **Send to** entry.
+
+On first start a setup window downloads, once, into `%LOCALAPPDATA%\Live Transcription`:
+
+- the speech models, about 1.7 GB;
+- on computers with an NVIDIA graphics card only, its CUDA libraries (cuBLAS, cuDNN, NVRTC from
+  PyPI, checked against their SHA-256), about 1.3 GB download and 1.9 GB on disk. They let
+  transcription run on the GPU, several times faster. Without an NVIDIA card nothing is downloaded
+  and everything runs on the CPU. If this download fails, the app uses the CPU and tries again on
+  the next start.
+
+Models, CUDA libraries and preferences remain there when the application is updated, so updates
+download only the small installer.
 
 The installer is currently not code-signed. If Microsoft Defender SmartScreen appears, verify that
 the file was downloaded from this repository, choose **More info**, then **Run anyway**. This warning
@@ -73,7 +83,7 @@ makes three shortcuts with icons in the tool folder. Update with `git pull` and 
 again.
 
 The packaged application can be removed from **Settings → Apps → Installed apps**. Its downloaded
-models and preferences are intentionally kept for later installations; remove
+models, CUDA libraries and preferences are intentionally kept for later installations; remove
 `%LOCALAPPDATA%\Live Transcription` separately if they are no longer needed.
 
 ### macOS
