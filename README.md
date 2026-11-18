@@ -144,10 +144,17 @@ The live workflow has five explicit states: preparation, translation-model downl
 finishing the last phrases, and creating results. The folder can be edited or chosen with the
 system dialog; less-used options stay under **Additional settings**. During recording, drafts are
 shown separately from confirmed text and the translation column can be hidden temporarily.
+Before the start, level bars show that the microphone and the computer sound are heard.
+
+![Meeting now on Windows: Back, meeting language, translation into German with its model ready, the microphone and computer sound with their level bars, and the red Start recording button](docs/screenshots/2-before.png)
+
+The processing shows its steps while it runs; the full log is under **Details**. When it ends,
+the results come first, and the taskbar button flashes with a notification if the window is in
+the background.
 
 <p>
-<img src="docs/screenshots/2-before.png" alt="Meeting now on Windows: Back, meeting language, translation into German with its model ready, microphone and computer sound, and the red Start recording button" width="49%">
-<img src="docs/screenshots/3-recording.png" alt="Transcribing a recording made elsewhere on Windows: language, speakers, translation and AI options, the processing log, and buttons to open the text and its translation" width="49%">
+<img src="docs/screenshots/3-processing.png" alt="Transcribing a recording on Windows: Stop processing, and the steps Transcription and Speakers running, Translation into German waiting" width="49%">
+<img src="docs/screenshots/4-results.png" alt="The same recording done in 1 minute: a green panel with the primary Open text button, Open translation, Open folder, Change the settings and run again, and Details" width="49%">
 </p>
 
 The results of a recording go into a folder next to it:
