@@ -53,8 +53,10 @@ Name: "sendto"; Description: "Add Transcribe to the Explorer Send to menu"; Grou
 Source: "{#PayloadDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\Live Transcription"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch-live.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\app\icons\live.ico"
-Name: "{group}\Transcribe a recording"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\transcribe-recording.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\app\icons\transcribe.ico"
+; AppUserModelID is the app ID of the window (live_gui.APP_ID): its taskbar button belongs to these
+; shortcuts, and Windows shows its notifications ("the results are ready").
+Name: "{group}\Live Transcription"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch-live.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\app\icons\live.ico"; AppUserModelID: "transcribe.live"
+Name: "{group}\Transcribe a recording"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\transcribe-recording.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\app\icons\transcribe.ico"; AppUserModelID: "transcribe.live"
 Name: "{group}\Uninstall Live Transcription"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\Live Transcription"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch-live.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\app\icons\live.ico"; Tasks: desktopicon
 Name: "{userappdata}\Microsoft\Windows\SendTo\Transcribe with Live Transcription"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\transcribe-recording.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\app\icons\transcribe.ico"; Tasks: sendto

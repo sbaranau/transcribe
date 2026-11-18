@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.28 — 2026-11-18
+
+- Processing shows its steps (transcription, speakers, translation, AI check, summary) with
+  their state, a percentage and the time left, instead of the raw log; the log is under
+  Details, opened by itself when something failed.
+- When the processing ends, the results come first: a green panel with the main text as the
+  primary button, the translation and summary beside it, the folder, and "Change the settings
+  and run again".
+- When the window is not in front at that moment, its taskbar button flashes and Windows shows
+  a notification (a click opens the text); macOS and Linux show a system notification.
+- The meeting setup shows live levels of the microphone and the computer sound before the
+  start, and says when the microphone hears nothing.
+- The processing options chosen last time (speakers, translation, AI check, summary) are
+  offered again.
+
 ## v1.27 — 2026-11-16
 
 - The Windows installer carries a fixed product name and version, and the release workflow is

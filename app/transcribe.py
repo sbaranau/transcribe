@@ -628,13 +628,16 @@ def transcribe_file(model, path: str, args) -> str:
     segment_filter = None if args.no_filter else SegmentFilter()
     recognized = []  # (segment, text after the filter)
     last_report = 0.0
+    # About 20 progress lines per recording (every 30 s to 5 min of sound): the window shows
+    # them as a percentage and the time left.
+    report_every = min(300.0, max(30.0, (info.duration or 0) / 20))
     for segment in segments:
         text = segment.text.strip()
         if text and segment_filter:
             text = segment_filter.clean(text)
         if text:
             recognized.append((segment, text))
-        if segment.end - last_report >= 300:
+        if segment.end - last_report >= report_every:
             last_report = segment.end
             percent = 100 * segment.end / info.duration if info.duration else 0
             print(f"  {format_clock(segment.end)} / {format_clock(info.duration)} "

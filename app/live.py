@@ -164,6 +164,50 @@ class Source(threading.Thread):
             self.failed = error
 
 
+class LevelProbe:
+    """Listens to the chosen devices before a recording, only for the meters of the setup screen,
+    so a silent microphone is noticed before the meeting. Nothing is stored."""
+
+    def __init__(self, microphone, speakers: list):
+        self.microphone = Source(microphone, "", False) if microphone is not None else None
+        self.computer = []
+        if speakers:
+            import soundcard as sc
+            for speaker in speakers:
+                try:
+                    self.computer.append(Source(loopback_of(sc, speaker), "", True))
+                except Exception:
+                    pass  # the recording itself reports a device it cannot listen to
+        for source in self.sources():
+            source.start()
+
+    def sources(self) -> list:
+        return ([self.microphone] if self.microphone else []) + self.computer
+
+    @staticmethod
+    def level(source) -> float:
+        """The newest block's RMS; the last one again while no new block has come (a block is
+        0.25 s, the meters are drawn every 0.1 s)."""
+        while True:
+            try:
+                source.level = rms(source.blocks.get_nowait())
+            except queue.Empty:
+                return getattr(source, "level", 0.0)
+
+    def levels(self) -> tuple[float, float]:
+        """(microphone, computer): the RMS of the newest block of each, the loudest output."""
+        microphone = self.level(self.microphone) if self.microphone else 0.0
+        computer = max((self.level(source) for source in self.computer), default=0.0)
+        return microphone, computer
+
+    def stop(self) -> None:
+        """Releases the devices; waits briefly, so the recording that follows can open them."""
+        for source in self.sources():
+            source.running = False
+        for source in self.sources():
+            source.join(timeout=1.0)
+
+
 class AutoGain:
     """Brings the speech level of a stream to MIC_TARGET_LEVEL, gradually."""
 

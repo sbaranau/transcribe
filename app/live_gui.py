@@ -82,6 +82,8 @@ class App:
         self.cancelled = False
         self.events = queue.Queue()
         self.model = self.hotwords = self.session = None
+        self.probe = None  # sound levels on the setup screen (live.LevelProbe)
+        self.folded = []  # options hidden while the processing runs and while its results show
         self.levels = (0.0, 0.0)
         self.paragraph_start = self.last_end = self.last_label = None
         self.drafts = {}  # label -> unfinished phrase
@@ -237,8 +239,13 @@ class App:
         self.has_computer_audio = bool(speakers)
         self.microphones = {m.name: m for m in microphones}
         ttk.Label(frame, text=t("win.microphone")).grid(row=2, column=0, sticky="w", pady=3)
-        self.microphone = ttk.Combobox(frame, state="readonly", width=50,
+        microphone_line = ttk.Frame(frame)
+        microphone_line.grid(row=2, column=1, sticky="w", pady=3)
+        self.microphone = ttk.Combobox(microphone_line, state="readonly", width=50,
                                        values=list(self.microphones) + [t("win.no_microphone")])
+        self.microphone.bind("<<ComboboxSelected>>", lambda _event: self.start_probe())
+        # Levels before the start, so a silent microphone is noticed before the meeting.
+        self.setup_meters = {}
         last_microphone = remembered.get("microphone")
         if last_microphone in self.microphones:
             self.microphone.set(last_microphone)
@@ -246,7 +253,12 @@ class App:
             self.microphone.set(t("win.no_microphone"))
         else:
             self.microphone.set(default_microphone.name)
-        self.microphone.grid(row=2, column=1, sticky="w", pady=3)
+        self.microphone.pack(anchor="w")
+        meter_line = ttk.Frame(microphone_line)
+        meter_line.pack(anchor="w", pady=(4, 0))
+        self.setup_meters["microphone"] = self.setup_meter(meter_line)
+        self.setup_meters["microphone"][0].pack(side="left")
+        self.setup_meters["microphone"][2].pack(side="left", padx=(6, 0))
 
         self.speakers = []
         self.speaker_buttons = []
@@ -256,10 +268,15 @@ class App:
             box.grid(row=3, column=1, sticky="w", pady=3)
             for speaker in speakers:
                 var = tk.BooleanVar(value=True)
-                button = ttk.Checkbutton(box, text=speaker.name, variable=var)
+                button = ttk.Checkbutton(box, text=speaker.name, variable=var, command=self.start_probe)
                 button.pack(anchor="w")
                 self.speaker_buttons.append(button)
                 self.speakers.append((speaker, var))
+            meter_line = ttk.Frame(box)
+            meter_line.pack(anchor="w", pady=(3, 0))
+            self.setup_meters["computer"] = self.setup_meter(meter_line)
+            self.setup_meters["computer"][0].pack(side="left")
+            self.setup_meters["computer"][2].pack(side="left", padx=(6, 0))
             ttk.Label(box, text=t("win.all_devices"),
                       style="Note.TLabel", wraplength=520).pack(anchor="w")
 
@@ -378,6 +395,7 @@ class App:
 
     def show_home(self) -> None:
         self.screen = "home"
+        self.stop_probe()
         for widget in (self.back_bar, self.setup_frame, self.text_frame):
             widget.pack_forget()
         self.status.configure(text="")
@@ -395,6 +413,7 @@ class App:
             self.status.configure(text=t("win.ready"), foreground=GREEN)
         else:
             self.status.configure(text=t("win.loading"), foreground=GREY)
+        self.start_probe()
 
     # --- recordings made elsewhere ----------------------------------------------------------------
 
@@ -431,6 +450,53 @@ class App:
         if path.lower().endswith(".txt"):
             return os.path.splitext(path)[0]
         return tool.output_base(path, None)
+
+    # --- sound levels before the start -----------------------------------------------------------
+
+    @staticmethod
+    def setup_meter(parent) -> tuple:
+        """(canvas, bar, note, [time sound was last heard]); the caller places canvas and note."""
+        canvas = tk.Canvas(parent, height=10, width=140, highlightthickness=0, background="#e6e6e6")
+        bar = canvas.create_rectangle(0, 0, 0, 10, fill=GREEN, width=0)
+        note = ttk.Label(parent, text="", style="Note.TLabel")
+        return canvas, bar, note, [time.time()]
+
+    def start_probe(self) -> None:
+        """Listens to the chosen microphone and outputs while the setup screen is shown."""
+        self.stop_probe()
+        if self.screen != "live":
+            return
+        microphone = self.microphones.get(self.microphone.get())
+        speakers = [speaker for speaker, var in self.speakers if var.get()]
+        for canvas, bar, note, heard in self.setup_meters.values():
+            canvas.coords(bar, 0, 0, 0, 10)
+            note.configure(text="")
+            heard[0] = time.time()
+        try:
+            self.probe = live.LevelProbe(microphone, speakers)
+        except Exception as error:  # only a help: the recording reports device problems itself
+            print(f"Sound levels not shown: {error}", flush=True)
+
+    def stop_probe(self) -> None:
+        probe, self.probe = self.probe, None
+        if probe:
+            probe.stop()
+
+    def draw_setup_meters(self) -> None:
+        microphone, computer = self.probe.levels()
+        shown = {"microphone": (microphone, self.probe.microphone is not None),
+                 "computer": (computer, bool(self.probe.computer))}
+        for key, (canvas, bar, note, heard) in self.setup_meters.items():
+            level, listening = shown[key]
+            if draw_level(canvas, bar, level) > -45:
+                heard[0] = time.time()
+                note.configure(text="")
+            elif not listening:
+                note.configure(text="")
+            elif key == "microphone" and time.time() - heard[0] > 4:
+                note.configure(text=t("win.probe_mic_silent"), foreground=RED)
+            elif key == "computer":
+                note.configure(text=t("win.probe_computer"), foreground=GREY)
 
     def start_model_loading(self) -> None:
         self.model_loading = True
@@ -527,18 +593,19 @@ class App:
             cursor="hand2" if enabled else "arrow")
 
     @staticmethod
-    def load_ui_settings() -> dict:
+    def load_ui_settings(section: str = "live") -> dict:
+        """[live]: the choices before a meeting; [after]: the processing chosen last time."""
         import configparser
         settings = configparser.ConfigParser()
         settings.read(UI_SETTINGS, encoding="utf-8")
-        return dict(settings["live"]) if settings.has_section("live") else {}
+        return dict(settings[section]) if settings.has_section(section) else {}
 
     @staticmethod
-    def save_ui_settings(values: dict) -> None:
+    def save_ui_settings(values: dict, section: str = "live") -> None:
         import configparser
         settings = configparser.ConfigParser()
-        settings.read(UI_SETTINGS, encoding="utf-8")  # keeps [ui], the interface language
-        settings["live"] = {key: value for key, value in values.items() if value is not None}
+        settings.read(UI_SETTINGS, encoding="utf-8")  # keeps the other sections
+        settings[section] = {key: value for key, value in values.items() if value is not None}
         try:
             with open(UI_SETTINGS, "w", encoding="utf-8") as out:
                 settings.write(out)
@@ -553,6 +620,14 @@ class App:
                 "folder": self.folder_var.get().strip(),
                 "screen": str(self.screen_choice.current()) if self.screens else ""}
 
+    def chosen_processing(self) -> dict:
+        """The processing options, offered again next time (the same for meetings and files)."""
+        flag = lambda var: "1" if var.get() else "0"
+        return {"split": flag(self.split), "count": self.count.get().strip() or "0", "check": flag(self.check),
+                "translate": flag(self.translate),
+                "target": self.after_targets[self.after_target.current()][0],
+                "check_translation": flag(self.check_translation), "summary": flag(self.summary)}
+
     def change_interface(self, _event=None) -> None:
         code = list(ui_text.LANGUAGES)[self.interface.current()]
         if code == ui_text.language():
@@ -560,6 +635,7 @@ class App:
         ui_text.set_language(code)
         ui_text.save_language(code)
         self.save_ui_settings(self.chosen_settings())  # the new window offers the same choices
+        self.stop_probe()
         import shortcuts
         threading.Thread(target=shortcuts.rename_existing, daemon=True).start()
         # The rebuilt window opens the same screen and keeps a model already loaded.
@@ -727,6 +803,7 @@ class App:
         if microphone is None and not speakers:
             messagebox.showwarning(t("win.nothing_title"), t("win.nothing_text"))
             return
+        self.stop_probe()  # the recording opens the same devices
         language = self.languages[self.language.current()][0]
         self.args.language = language
         entered_folder = self.folder_var.get().strip()
@@ -750,6 +827,7 @@ class App:
             self.session.start()
         except Exception as error:
             messagebox.showerror(t("win.start_failed"), str(error))
+            self.start_probe()
             return
         self.screen = "recording"
         self.back_bar.pack_forget()
@@ -1036,15 +1114,14 @@ class App:
         ttk.Button(footer, text=t("win.close"), command=self.on_close).pack(side="right")
         self.new_recording_button = ttk.Button(
             footer, text=t("win.back_to_start") if file_mode else t("win.new_recording"),
-            style="Big.TButton", command=self.new_recording)
+            command=self.new_recording)
         self.new_recording_button.pack(side="right", padx=(0, 8))
-        self.footer_results = ttk.Frame(footer)
-        self.footer_results.pack(side="left", fill="both", expand=True)
-        self.results_heading = ttk.Label(
-            self.footer_results, text=t("win.ready_results"), style="Note.TLabel")
-        self.result_buttons = ttk.Frame(self.footer_results)
         frame.pack(fill="x", padx=14, pady=(0, 8))
-        self.text_frame.pack(fill="both", expand=True, padx=14, pady=(0, 8))
+        # The processing log, under "Details": shown on request and when something failed.
+        self.log_frame, self.log_text = self.text_column(self.root)
+        self.log_text.configure(font=(FONT, 9), foreground="#444444", height=10, state="disabled")
+        if not file_mode:  # the meeting's own text; a recording from elsewhere has none to show
+            self.text_frame.pack(fill="both", expand=True, padx=14, pady=(0, 8))
         if file_mode:
             line = ttk.Frame(frame)
             line.grid(row=0, column=0, columnspan=3, sticky="ew")
@@ -1064,9 +1141,12 @@ class App:
         ttk.Label(frame, text=t("win.section_transcript"), style="Note.TLabel").grid(
             row=2, column=0, columnspan=3, sticky="w", pady=(0, 2))
 
+        # The processing chosen last time is offered again; the AI steps once an AI is found.
+        last = self.load_ui_settings("after")
+        self.wanted_ai = {key: last.get(key) == "1" for key in ("check", "check_translation", "summary")}
         self.redo = tk.BooleanVar(value=bool(media) if file_mode else True)
-        self.split = tk.BooleanVar(value=False)
-        self.count = tk.StringVar(value="0")
+        self.split = tk.BooleanVar(value=last.get("split") == "1")
+        self.count = tk.StringVar(value=last.get("count", "0") if last.get("count", "0").isdigit() else "0")
         self.check = tk.BooleanVar(value=False)
         self.summary = tk.BooleanVar(value=False)
         self.delete_sound = tk.BooleanVar(value=False)
@@ -1102,7 +1182,9 @@ class App:
                                          variable=self.check, command=self.refresh_after)
         self.check_box.grid(row=5, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=2)
         live_target = self.live_translator.target if self.live_translator else None
-        self.translate = tk.BooleanVar(value=bool(live_target))
+        # A meeting translated while it ran is translated again from the better transcript.
+        self.translate = tk.BooleanVar(value=bool(live_target) or last.get("translate") == "1")
+        live_target = live_target or last.get("target")
         self.check_translation = tk.BooleanVar(value=False)
         line = ttk.Frame(frame)
         line.grid(row=6, column=0, columnspan=3, sticky="w", pady=(8, 2))
@@ -1179,11 +1261,26 @@ class App:
             self.export_button.pack(side="left", padx=(6, 0))
         ttk.Label(frame, text=t("win.processing_estimate"), style="Note.TLabel", wraplength=760).grid(
             row=15, column=0, columnspan=3, sticky="w", pady=(6, 0))
+        # While it runs: the chosen steps with their state, instead of the raw log.
         self.processing_panel = ttk.Frame(frame)
         ttk.Label(self.processing_panel, text=t("win.processing_visible"), font=(FONT, 10, "bold")).pack(
-            anchor="w", pady=(0, 6))
+            anchor="w", pady=(0, 4))
+        self.step_file = ttk.Label(self.processing_panel, text="", style="Note.TLabel")
+        self.steps_box = ttk.Frame(self.processing_panel)
+        self.steps_box.pack(anchor="w", fill="x", pady=(2, 6))
         self.processing_progress = ttk.Progressbar(self.processing_panel, mode="indeterminate", length=520)
         self.processing_progress.pack(fill="x")
+        line = ttk.Frame(self.processing_panel)
+        line.pack(fill="x", pady=(4, 0))
+        self.step_eta = ttk.Label(line, text="", style="Note.TLabel")
+        self.step_eta.pack(side="left")
+        self.details_buttons = [ttk.Button(line, text=t("win.details_show"), command=self.toggle_details)]
+        self.details_buttons[0].pack(side="right")
+        # When it is done: the results first, with the main text as the primary action.
+        frame.columnconfigure(2, weight=1)  # the results panel spans the whole width
+        self.done_panel = tk.Frame(frame, background="#eef7f0", highlightbackground="#9cc9a8",
+                                   highlightthickness=1, padx=14, pady=12)
+        self.steps = []
         self.refresh_export()
         self.search_ai()
 
@@ -1197,8 +1294,8 @@ class App:
             ("ai", ai_engines.verify_engines(ai_engines.find_engines()))), daemon=True).start()
 
     def refresh_after(self) -> None:
-        if self.processing:
-            return  # everything stays locked until it ends
+        if self.processing or self.folded:
+            return  # locked until it ends; folded while the results are shown
         redo = self.redo.get()
         self.split_box.configure(state="normal" if redo else "disabled")
         self.count_box.configure(state="normal" if redo and self.split.get() else "disabled")
@@ -1250,6 +1347,11 @@ class App:
         if found:
             self.ai_choice.current(0)
             self.ai_note.configure(text="\n".join(notes))
+            if self.wanted_ai:  # the AI steps chosen last time, once there is an AI for them
+                self.check.set(self.wanted_ai["check"])
+                self.check_translation.set(self.wanted_ai["check_translation"])
+                self.summary.set(self.wanted_ai["summary"])
+                self.wanted_ai = None
         else:
             # Installed but not logged in, for example: said in the panel, where it helps.
             self.ai_note.configure(text="")
@@ -1320,12 +1422,14 @@ class App:
         self.cancelled = False
         # Read here: Tk variables are not to be read from the thread that follows the processing.
         self.delete_after = self.delete_sound.get()
+        self.save_ui_settings(self.chosen_processing(), section="after")
+        self.build_steps()
+        self.log_text.configure(state="normal")
+        self.log_text.delete("1.0", "end")
+        self.log_text.configure(state="disabled")
+        self.processing_started = time.time()
         self.lock_after(True)
         self.status.configure(text=t("win.processing"), foreground=GREY)
-        self.text.configure(state="normal")
-        self.text.insert("end", t("win.processing_head"), ("info",))
-        self.text.configure(state="disabled")
-        self.text.see("end")
         command = [sys.executable, os.path.join(TOOL_DIR, "transcribe.py")] + argv
         env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUTF8="1", PYTHONUNBUFFERED="1")
         # Its own process group, so Stop also ends what it started (the venv's python.exe
@@ -1341,6 +1445,182 @@ class App:
             self.events.put(("processed", 1))
             return
         threading.Thread(target=self.follow_processing, args=(self.processing,), daemon=True).start()
+
+    # --- progress as steps ----------------------------------------------------------------------
+
+    # Lines of transcribe.py (English for everyone) that start, end or fail a step.
+    STEP_LINES = [
+        ("Separating voices", "speakers", "active"), ("Waiting for the voice separation", "speakers", "active"),
+        ("Speakers:", "speakers", "done"),
+        ("Transcript done in", "transcribe", "done"), ("Transcript exists, kept", "transcribe", "done"),
+        ("FAILED:", "transcribe", "failed"),
+        ("Checking the text with", "check", "active"), ("Check done", "check", "done"),
+        ("Checked text exists", "check", "done"), ("No speaker labels", "check", "skipped"),
+        ("Check FAILED", "check", "failed"),
+        ("Translating ", "translate", "active"), ("Translation done", "translate", "done"),
+        ("Translation exists", "translate", "done"), ("Translation skipped", "translate", "skipped"),
+        ("Translation FAILED", "translate", "failed"),
+        ("Checking the translation with", "check_translation", "active"),
+        ("Translation check done", "check_translation", "done"),
+        ("Checked translation exists", "check_translation", "done"),
+        ("Summary with", "summary", "active"), ("Summary done", "summary", "done"),
+        ("Summary exists", "summary", "done"), ("Summary FAILED", "summary", "failed"),
+    ]
+    STEP_MARKS = {"pending": ("○", GREY, False), "active": ("●", "#1f1f1f", True), "done": ("✓", GREEN, False),
+                  "skipped": ("–", GREY, False), "failed": ("✗", RED, True)}
+
+    def build_steps(self) -> None:
+        """The steps this run will take, from the chosen options."""
+        for child in self.steps_box.winfo_children():
+            child.destroy()
+        wanted = []
+        if self.redo.get():
+            wanted.append(("transcribe", t("step.transcribe")))
+            if self.split.get():
+                wanted.append(("speakers", t("step.speakers")))
+            if self.check.get():
+                wanted.append(("check", t("step.check")))
+        if self.translate.get():
+            wanted.append(("translate", t("step.translate", language=self.after_target.get())))
+            if self.check_translation.get():
+                wanted.append(("check_translation", t("step.check_translation")))
+        if self.summary.get():
+            wanted.append(("summary", t("step.summary")))
+        self.steps = []
+        for key, title in wanted:
+            row = ttk.Frame(self.steps_box)
+            row.pack(anchor="w", fill="x")
+            mark = tk.Label(row, width=2, font=(FONT, 11), anchor="w")
+            mark.pack(side="left")
+            name = tk.Label(row, text=title, font=(FONT, 10), anchor="w")
+            name.pack(side="left")
+            detail = tk.Label(row, text="", font=(FONT, 9), foreground=GREY, anchor="w")
+            detail.pack(side="left", padx=(8, 0))
+            self.steps.append({"key": key, "state": "pending", "mark": mark, "name": name, "detail": detail})
+        self.step_failed = False
+        self.step_file.configure(text="")
+        self.step_file.pack_forget()
+        self.step_eta.configure(text="")
+        self.reset_steps()
+        if self.steps:
+            self.set_step(self.steps[0]["key"], "active")
+
+    def reset_steps(self) -> None:
+        for step in self.steps:
+            self.set_step(step["key"], "pending")
+            step["detail"].configure(text="")
+
+    def set_step(self, key: str, state: str, detail: str | None = None) -> None:
+        step = next((step for step in self.steps if step["key"] == key), None)
+        if step is None:
+            return
+        if state == "active" and step["state"] in ("done", "failed", "skipped"):
+            return  # e.g. "Waiting for the voice separation" after it already finished
+        step["state"] = state
+        symbol, colour, bold = self.STEP_MARKS[state]
+        step["mark"].configure(text=symbol, foreground=colour)
+        step["name"].configure(foreground="#1f1f1f" if state != "pending" else GREY,
+                               font=(FONT, 10, "bold") if bold else (FONT, 10))
+        if detail is not None:
+            step["detail"].configure(text=detail)
+        if state == "failed":
+            self.step_failed = True
+        if state != "active" and key == "transcribe":
+            self.processing_progress.configure(mode="indeterminate")
+            self.processing_progress.start(12)
+            self.step_eta.configure(text="")
+        if state in ("done", "skipped"):
+            # The next step that has not started yet is what runs now.
+            later = [s for s in self.steps if s["state"] == "pending"]
+            if later and not any(s["state"] == "active" for s in self.steps):
+                self.set_step(later[0]["key"], "active")
+
+    def follow_step(self, line: str) -> None:
+        """Moves the steps on from one line of the processing log."""
+        import re
+        text = line.strip()
+        number = re.match(r"\[(\d+)/(\d+)\] (.+)", text)
+        if number or (len(self.files or []) > 1 and text in self.files):
+            # The next recording (or transcript) of several: its steps start again.
+            self.processing_progress.configure(mode="indeterminate")
+            self.processing_progress.start(12)
+            self.reset_steps()
+            path = number.group(3) if number else text
+            index = self.files.index(path) + 1 if path in (self.files or []) else int(number.group(1))
+            self.step_file.configure(text=t("step.file", n=index, total=len(self.files or [path]),
+                                            name=os.path.basename(path)))
+            if self.files and len(self.files) > 1:
+                self.step_file.pack(anchor="w", before=self.steps_box)
+            if self.steps:
+                if number:
+                    self.set_step(self.steps[0]["key"], "active")
+                else:  # a transcript is not transcribed again
+                    self.set_step("transcribe", "skipped")
+                    later = [s for s in self.steps if s["state"] == "pending"]
+                    if later and not any(s["state"] == "active" for s in self.steps):
+                        self.set_step(later[0]["key"], "active")
+            return
+        progress = re.search(r" / \S+ \((\d+)%\), elapsed (\S+)", text)
+        if progress and not text.startswith("voices"):
+            percent = int(progress.group(1))
+            self.set_step("transcribe", "active", f"{percent}%")
+            self.processing_progress.stop()
+            self.processing_progress.configure(mode="determinate", maximum=100, value=percent)
+            elapsed = clock_seconds(progress.group(2))
+            if 3 <= percent < 100 and elapsed:
+                left = elapsed * (100 - percent) / percent
+                self.step_eta.configure(text=t("step.left", time=about_minutes(left)))
+            return
+        voices = re.match(r"voices (\d+)%", text)
+        if voices:
+            self.set_step("speakers", "active", f"{voices.group(1)}%")
+            return
+        part = re.match(r"checking part (\d+/\d+)", text)
+        if part:
+            active = next((s["key"] for s in self.steps if s["state"] == "active" and s["key"] != "speakers"), None)
+            if active:
+                self.set_step(active, "active", part.group(1))
+            return
+        if text.startswith(("GPU not usable", "GPU run failed")):
+            self.set_step("transcribe", "active", t("step.on_cpu"))
+            return
+        for start, key, state in self.STEP_LINES:
+            if text.startswith(start):
+                if key == "speakers" and state == "active":
+                    self.set_step(key, state, "")
+                else:
+                    self.set_step(key, state, t("step.skipped") if state == "skipped" else None)
+                if state == "active" and key != "speakers":  # the voices run alongside the transcription
+                    # A step that starts ends the previous one, which said nothing more.
+                    for step in self.steps:
+                        if step["state"] == "active" and step["key"] not in (key, "speakers"):
+                            self.set_step(step["key"], "done")
+                return
+
+    def toggle_details(self, show: bool | None = None) -> None:
+        visible = bool(self.log_frame.winfo_manager())
+        show = not visible if show is None else show
+        if show and not visible:
+            if self.text_frame.winfo_manager():
+                self.log_frame.pack(fill="both", expand=True, padx=14, pady=(0, 8), before=self.text_frame)
+            else:
+                self.log_frame.pack(fill="both", expand=True, padx=14, pady=(0, 8))
+            self.log_text.see("end")
+        elif not show and visible:
+            self.log_frame.pack_forget()
+        for button in self.details_buttons:
+            if button.winfo_exists():
+                button.configure(text=t("win.details_hide") if show else t("win.details_show"))
+
+    def add_log(self, line: str) -> None:
+        follow = self.log_text.yview()[1] >= 0.999
+        self.log_text.configure(state="normal")
+        self.log_text.insert("end", line + "\n")
+        self.log_text.configure(state="disabled")
+        if follow:
+            self.log_text.see("end")
+        if self.processing is not None:
+            self.follow_step(line)
 
     def follow_processing(self, process: subprocess.Popen) -> None:
         for line in process.stdout:
@@ -1369,21 +1649,17 @@ class App:
             self.run_button.pack_forget()
             self.cancel_button.configure(state="normal")
             self.cancel_button.pack(side="left", before=self.folder_button)
-            # The locked options are folded away, so the log below gets the room; only the
-            # file line (row 0), the buttons (14) and the progress (16) stay.
-            self.folded = [widget for widget in self.after_frame.grid_slaves()
-                           if int(widget.grid_info()["row"]) not in (0, 14, 16)]
-            for widget in self.folded:
-                widget.grid_remove()
+            # The locked options are folded away, so the steps get the room; only the file line
+            # (row 0), the buttons (14) and the progress (16) stay.
+            self.done_panel.grid_remove()
+            self.fold_options(True, keep=(0, 14, 16))
             self.processing_panel.grid(row=16, column=0, columnspan=3, sticky="ew", pady=(12, 2))
+            self.processing_progress.configure(mode="indeterminate")
             self.processing_progress.start(12)
         else:
             self.new_recording_button.configure(state="normal")
             self.processing_progress.stop()
             self.processing_panel.grid_remove()
-            for widget in getattr(self, "folded", []):
-                widget.grid()  # refresh_after below hides again what the choices do not need
-            self.folded = []
             self.cancel_button.pack_forget()
             self.run_button.pack(side="left", before=self.folder_button)
             for widget in (self.redo_box, self.summary_box, self.translate_box, self.path_entry, self.try_button,
@@ -1396,8 +1672,21 @@ class App:
                 self.change_files_button.configure(state="normal")
                 if self.file_language:
                     self.file_language.configure(state="readonly")
-            self.refresh_after()
         self.refresh_export(locked)
+
+    def fold_options(self, fold: bool, keep: tuple = ()) -> None:
+        """Hides the rows of the options panel except those in keep, or shows them again."""
+        if fold:
+            hidden = [widget for widget in self.after_frame.grid_slaves()
+                      if int(widget.grid_info()["row"]) not in keep]
+            for widget in hidden:
+                widget.grid_remove()
+            self.folded += hidden
+        else:
+            folded, self.folded = self.folded, []
+            for widget in folded:
+                widget.grid()
+            self.refresh_after()  # hides again what the choices do not need
 
     def refresh_export(self, locked: bool = False) -> None:
         if self.session is None:
@@ -1442,6 +1731,7 @@ class App:
         else:
             folders = [os.path.dirname(self.session.wav_path)]
         self.processing = None
+        self.lock_after(False)
         if self.cancelled:
             # A transcript is written to <name>.partial and renamed only when complete.
             for folder in folders:
@@ -1449,44 +1739,57 @@ class App:
                     os.remove(leftover)
             self.status.configure(text=t("win.cancelled"), foreground=RED)
             self.events.put(("log", t("win.cancelled_note")))
-        else:
-            self.status.configure(text=t("win.done") if code == 0 else t("win.done_errors"),
-                                  foreground=GREEN if code == 0 else RED)
-        self.lock_after(False)
-        for child in self.result_buttons.winfo_children():
-            child.destroy()
-        if self.files is not None:
-            self.show_file_results()
+            self.fold_options(False)
             return
-        folder = folders[0]
-        results = [("meeting.checked.md", "win.text_with_shots"), ("meeting.md", "win.text_with_shots"),
-                   ("meeting.checked.txt", "win.checked_text"), ("meeting.txt", "win.text"),
-                   ("meeting.live.md", "win.text_with_shots")]
-        for code in translator.LANGUAGES:
-            results += [(f"meeting.{code}.checked.txt", "win.checked_translation"), (f"meeting.{code}.txt", "win.translation"),
-                        (f"meeting.live.{code}.checked.txt", "win.checked_translation"),
-                        (f"meeting.live.{code}.txt", "win.translation")]
-        results += [("meeting.summary.md", "win.summary_file"), ("meeting.live.summary.md", "win.summary_file")]
-        for name, key in results:
-            path = os.path.join(folder, name)
-            label = t("win.open", what=t(key))
-            if os.path.exists(path) and not any(b.cget("text") == label for b in self.result_buttons.winfo_children()):
-                self.results_heading.pack(anchor="w", pady=(0, 3))
-                self.result_buttons.pack(anchor="w")
-                ttk.Button(self.result_buttons, text=label,
-                           command=lambda p=path: tool.open_path(p)).pack(side="left", padx=(0, 6))
+        failed = code != 0 or self.step_failed
+        self.status.configure(text="⚠  " + t("win.done_errors") if failed else "✓  " + t("win.done"),
+                              foreground=RED if failed else GREEN)
+        groups = self.result_files()
+        if self.files is not None:
+            for path, (_, results) in zip(self.files, groups):
+                if results:
+                    add_recent("file", os.path.basename(path), os.path.dirname(self.file_base(path)))
+            first_folder = os.path.dirname(self.file_base(self.files[0]))
+            if os.path.isdir(first_folder):
+                self.folder = first_folder
+        self.show_done(failed, groups)
+        if self.files is not None:
+            name = os.path.basename(self.files[0]) + (f" (+{len(self.files) - 1})" if len(self.files) > 1 else "")
+        else:
+            name = os.path.basename(folders[0])
+        main = next((results[0][1] for _, results in groups if results), None)
+        notify(self.root, t("win.title"), t("win.notify_errors" if failed else "win.notify_done", name=name),
+               main or self.folder)
 
-    def show_file_results(self) -> None:
-        """One button per result file of each chosen recording; with several recordings the
-        button names which one."""
-        several = len(self.files) > 1
+    def result_files(self) -> list:
+        """[(recording name or None, [(label key, path), ...])], the main text first."""
+        if self.files is None:
+            folder = os.path.dirname(self.session.wav_path)
+            names = [("meeting.checked.md", "win.text_with_shots"), ("meeting.md", "win.text_with_shots"),
+                     ("meeting.checked.txt", "win.checked_text"), ("meeting.txt", "win.text"),
+                     ("meeting.live.md", "win.text_with_shots")]
+            for code in translator.LANGUAGES:
+                names += [(f"meeting.{code}.checked.txt", "win.checked_translation"),
+                          (f"meeting.{code}.txt", "win.translation"),
+                          (f"meeting.live.{code}.checked.txt", "win.checked_translation"),
+                          (f"meeting.live.{code}.txt", "win.translation")]
+            names += [("meeting.summary.md", "win.summary_file"), ("meeting.live.summary.md", "win.summary_file")]
+            found, shown = [], []
+            for name, key in names:
+                path = os.path.join(folder, name)
+                # One button per kind: the best one (checked before plain, after before live).
+                if os.path.exists(path) and key not in shown:
+                    shown.append(key)
+                    found.append((key, path))
+            return [(None, found)]
         suffixes = [(".checked.txt", "win.checked_text"), (".txt", "win.text")]
         for code in translator.LANGUAGES:
             suffixes += [(f".{code}.checked.txt", "win.checked_translation"), (f".{code}.txt", "win.translation")]
         suffixes.append((".summary.md", "win.summary_file"))
+        groups = []
         for path in self.files:
             base = self.file_base(path)
-            shown = []
+            found, shown = [], []
             for suffix, key in suffixes:
                 result = base + suffix
                 # A .txt input is the transcript itself, not a result of this run.
@@ -1494,18 +1797,62 @@ class App:
                         or key in shown):
                     continue
                 shown.append(key)
+                found.append((key, result))
+            groups.append((os.path.basename(path), found))
+        return groups
+
+    def show_done(self, failed: bool, groups) -> None:
+        """The results first: the main text as the primary action, the others beside it, then the
+        details and a way back to the settings."""
+        panel = self.done_panel
+        for child in panel.winfo_children():
+            child.destroy()
+        background = "#fdecea" if failed else "#eef7f0"
+        panel.configure(background=background, highlightbackground="#e3a6a0" if failed else "#9cc9a8")
+        took = about_minutes(time.time() - self.processing_started)
+        title = ("⚠  " + t("win.done_with_errors")) if failed else ("✓  " + t("win.done_in", time=took))
+        tk.Label(panel, text=title, font=(FONT, 13, "bold"), foreground=RED if failed else GREEN,
+                 background=background, anchor="w").pack(fill="x")
+        several = len(groups) > 1
+        for name, results in groups:
+            if several:
+                tk.Label(panel, text=name, font=(FONT, 10, "bold"), background=background,
+                         anchor="w").pack(fill="x", pady=(10, 2))
+            line = tk.Frame(panel, background=background)
+            line.pack(anchor="w", pady=(0 if several else 10, 0))
+            for number, (key, path) in enumerate(results):
                 label = t("win.open", what=t(key))
-                if several:
-                    label += f" — {os.path.splitext(os.path.basename(path))[0]}"
-                self.results_heading.pack(anchor="w", pady=(0, 3))
-                self.result_buttons.pack(anchor="w")
-                ttk.Button(self.result_buttons, text=label,
-                           command=lambda p=result: tool.open_path(p)).pack(side="left", padx=(0, 6))
-            if shown:
-                add_recent("file", os.path.basename(path), os.path.dirname(base))
-        first_folder = os.path.dirname(self.file_base(self.files[0]))
-        if os.path.isdir(first_folder):
-            self.folder = first_folder
+                if number == 0 and not several:
+                    primary_label(line, label, ("#168447", "#106a38"),
+                                  lambda p=path: tool.open_path(p), size=12).pack(side="left", padx=(0, 8))
+                else:
+                    ttk.Button(line, text=label, command=lambda p=path: tool.open_path(p)).pack(
+                        side="left", padx=(0, 6))
+            if not results:
+                tk.Label(line, text=t("win.no_results"), font=(FONT, 10), background=background).pack(side="left")
+        line = tk.Frame(panel, background=background)
+        line.pack(fill="x", pady=(12, 0))
+        ttk.Button(line, text=t("win.open_folder"), command=self.open_folder).pack(side="left")
+        if self.files is None and screenshots.exportable(os.path.dirname(self.session.wav_path)):
+            ttk.Button(line, text=t("win.export_html"), command=self.export_html).pack(side="left", padx=(6, 0))
+        details = ttk.Button(line, text=t("win.details_show"), command=self.toggle_details)
+        details.pack(side="right")
+        again = tk.Label(line, text=t("win.run_again"), font=(FONT, 10, "underline"), foreground="#1565c0",
+                         background=background, cursor="hand2", takefocus=True)
+        for sequence in ("<Button-1>", "<Return>", "<space>"):
+            again.bind(sequence, lambda _event: self.run_again())
+        again.pack(side="right", padx=(0, 12))
+        self.details_buttons = [self.details_buttons[0], details]
+        self.fold_options(True, keep=(0,))
+        panel.grid(row=17, column=0, columnspan=3, sticky="ew", pady=(10, 2))
+        self.toggle_details(failed)
+
+    def run_again(self) -> None:
+        """Back from the results to the options, to run again with other choices."""
+        self.done_panel.grid_remove()
+        self.toggle_details(False)
+        self.fold_options(False)
+
 
     # --- events -----------------------------------------------------------------------------------
 
@@ -1555,13 +1902,7 @@ class App:
                 elif kind == "ai":
                     self.show_ai(*data)
                 elif kind == "log":
-                    # Follows the new lines only while the end is in view, so the log can be
-                    # scrolled back and read while progress lines keep coming in.
-                    follow = self.at_end()
-                    self.text.configure(state="normal")
-                    self.text.insert("end", data + "\n", ("info",))
-                    self.text.configure(state="disabled")
-                    self.after_insert(follow)
+                    self.add_log(data)
                 elif kind == "exported":
                     self.show_exported(data)
                 elif kind == "translated":
@@ -1599,18 +1940,14 @@ class App:
         if self.session and not self.session.stopping.is_set():
             self.timer.configure(text=tool.format_clock(self.session.seconds))
             self.draw_meters()
+        elif self.probe:
+            self.draw_setup_meters()
         self.root.after(100, self.poll)
 
     def draw_meters(self) -> None:
-        import math
         levels = {"microphone": self.levels[0], "computer": self.levels[1]}
         for key, (canvas, bar, note, last_heard) in self.meters.items():
-            level = levels[key]
-            decibels = 20 * math.log10(level) if level > 1e-6 else -90
-            fraction = min(1.0, max(0.0, (decibels + 60) / 60))
-            width = int(canvas.cget("width"))
-            canvas.coords(bar, 0, 0, int(width * fraction), 14)
-            if decibels > -45:
+            if draw_level(canvas, bar, levels[key]) > -45:
                 last_heard[0] = time.time()
                 note.configure(text="")
             elif time.time() - last_heard[0] > 15:
@@ -1628,6 +1965,7 @@ class App:
             self.status.configure(text=t("win.stopping_short"), foreground=GREY)
             self.root.update()
             self.session.stop()
+        self.stop_probe()
         self.root.destroy()
 
 
@@ -1640,6 +1978,80 @@ def stop_process_tree(process: subprocess.Popen) -> None:
             os.killpg(process.pid, signal.SIGTERM)
     except (OSError, subprocess.SubprocessError):
         process.kill()
+
+
+# A Windows notification ("toast") through the WinRT API that PowerShell 5.1 reaches without any
+# package. It shows only for an app ID that a Start menu shortcut carries (installer.iss sets it
+# to the one of run()); a click opens the main result.
+TOAST_SCRIPT = (
+    "$null = [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime];"
+    "$null = [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom, ContentType = WindowsRuntime];"
+    "$xml = New-Object Windows.Data.Xml.Dom.XmlDocument; $xml.LoadXml($env:LIVE_TRANSCRIPTION_TOAST);"
+    "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($env:LIVE_TRANSCRIPTION_APP_ID)"
+    ".Show([Windows.UI.Notifications.ToastNotification]::new($xml))")
+APP_ID = "transcribe.live"
+
+
+def notify(root: tk.Tk, title: str, message: str, target: str | None) -> None:
+    """Tells that a long processing has ended when the window is not in front: the taskbar button
+    flashes and a system notification shows. Nothing when the window is in use."""
+    try:
+        if root.focus_displayof() is not None:
+            return
+    except (KeyError, tk.TclError):
+        pass  # a messagebox has the focus: the window is in use
+    try:
+        if os.name == "nt":
+            from xml.sax.saxutils import escape, quoteattr
+            import pathlib
+
+            class FlashInfo(ctypes.Structure):
+                _fields_ = [("cbSize", ctypes.c_uint), ("hwnd", ctypes.c_void_p), ("dwFlags", ctypes.c_uint),
+                            ("uCount", ctypes.c_uint), ("dwTimeout", ctypes.c_uint)]
+            hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
+            # FLASHW_ALL | FLASHW_TIMERNOFG: flashes until the window comes to the front.
+            info = FlashInfo(ctypes.sizeof(FlashInfo), hwnd, 0x3 | 0xC, 0, 0)
+            ctypes.windll.user32.FlashWindowEx(ctypes.byref(info))
+            launch = (f' activationType="protocol" launch={quoteattr(pathlib.Path(target).as_uri())}'
+                      if target and os.path.exists(target) else "")
+            xml = (f"<toast{launch}><visual><binding template=\"ToastGeneric\"><text>{escape(title)}</text>"
+                   f"<text>{escape(message)}</text></binding></visual></toast>")
+            env = dict(os.environ, LIVE_TRANSCRIPTION_TOAST=xml, LIVE_TRANSCRIPTION_APP_ID=APP_ID)
+            subprocess.Popen(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", TOAST_SCRIPT],
+                             env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             creationflags=subprocess.CREATE_NO_WINDOW)
+        elif sys.platform == "darwin":
+            script = f"display notification {json.dumps(message)} with title {json.dumps(title)}"
+            subprocess.Popen(["osascript", "-e", script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            import shutil
+            if shutil.which("notify-send"):
+                subprocess.Popen(["notify-send", title, message], stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL)
+            root.bell()
+    except Exception as error:  # only a convenience
+        print(f"Notification not shown: {error}", flush=True)
+
+
+def clock_seconds(clock: str) -> float:
+    """Seconds of "hh:mm:ss" (as transcribe.format_clock writes it); 0 if it is not one."""
+    try:
+        return sum(int(part) * 60 ** power for power, part in enumerate(reversed(clock.split(":"))))
+    except ValueError:
+        return 0
+
+
+def about_minutes(seconds: float) -> str:
+    return t("step.minutes", n=round(seconds / 60)) if seconds >= 90 else t("step.under_minutes")
+
+
+def draw_level(canvas: tk.Canvas, bar, level: float) -> float:
+    """Draws an RMS level on a meter, -60..0 dB over its width; returns the level in dB."""
+    import math
+    decibels = 20 * math.log10(level) if level > 1e-6 else -90
+    fraction = min(1.0, max(0.0, (decibels + 60) / 60))
+    canvas.coords(bar, 0, 0, int(int(canvas.cget("width")) * fraction), int(canvas.cget("height")))
+    return decibels
 
 
 def primary_label(parent, text: str, colours: tuple[str, str], command, size: int = 13) -> tk.Label:
@@ -1698,7 +2110,7 @@ def run(args) -> int:
         try:
             ctypes.windll.shcore.SetProcessDpiAwareness(1)  # sharp text on high-DPI screens
             # Its own taskbar button with its own icon, not grouped under python.exe.
-            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("transcribe.live")
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
         except Exception:
             pass
     loaded = None
