@@ -19,3 +19,6 @@ pycparser==3.12
 # faster-whisper and sherpa-onnx, pinned here since the translation uses them directly. MIT / Apache-2.0.
 onnxruntime==1.31.1
 tokenizers==0.23.3
+# Window theme (theme.py): Sun Valley, the Windows 11 Fluent look for ttk, light and dark; MIT.
+# Pure Tcl and Python, about 80 KB. Added 2026-11-20.
+sv-ttk==2.6.1

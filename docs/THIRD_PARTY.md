@@ -32,6 +32,7 @@ for the World", EAMT 2020; University of Helsinki, [Helsinki-NLP/Opus-MT](https:
 | onnxruntime | running the ONNX models | MIT |
 | tokenizers, huggingface-hub | translation tokenizer; model download | Apache-2.0 |
 | soundcard, cffi | recording the microphone and the computer sound | BSD-3-Clause, MIT |
+| sv-ttk (Sun Valley ttk theme) | the look of the window, light and dark | MIT |
 | numpy | audio and model arithmetic | BSD-3-Clause |
 
 The setup installs Python 3.12 (PSF license) with [uv](https://docs.astral.sh/uv/) (MIT or

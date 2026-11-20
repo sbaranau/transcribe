@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- A modern look: the window uses the Sun Valley theme (sv-ttk, the Windows 11 Fluent style, also
+  on macOS) with rounded buttons and fields, and a new "calm ink-blue" palette instead of the
+  grey: slightly blue-tinted neutrals, white cards, a deep indigo app bar with the title, one blue
+  accent for the main actions instead of red, green and blue, and calm status colours (every text
+  colour at least 4.5:1 contrast). Updates, help and about moved into one "⋯" menu; the work's
+  state shows below the bar; the home cards' icons sit on a tinted tile and the transcript in a
+  framed field.
+- Dark mode: the window follows the system's light or dark setting (Windows and macOS), including a
+  dark title bar on Windows. TRANSCRIBE_THEME=light or dark overrides it.
+
 ## v1.32 — 2026-11-20
 
 - Windows: the installer could not close a running Live Transcription, because its launcher has

@@ -37,10 +37,12 @@ import ai_install
 import live
 import paths
 import screenshots
+import theme
 import transcribe as tool
 import translator
 import ui_text
 import updates
+from theme import C
 from ui_text import t
 
 # Stored in ui.local.ini for "do not record the microphone", whatever the interface language.
@@ -101,7 +103,7 @@ class App:
 
         root.title(t("win.title"))
         set_icon(root)
-        root.geometry(f"900x{min(820, max(600, root.winfo_screenheight() - 90))}")
+        root.geometry(f"900x{min(900, max(600, root.winfo_screenheight() - 90))}")
         root.minsize(720, 520)
         root.protocol("WM_DELETE_WINDOW", self.on_close)
         # Windows asks the window to end (an installer updating the app, logging off): Tk turns
@@ -109,13 +111,7 @@ class App:
         root.protocol("WM_SAVE_YOURSELF", self.end_session)
         if sys.platform == "darwin":
             root.createcommand("::tk::mac::Quit", self.on_close)  # Cmd+Q and Quit in the Dock
-        style = ttk.Style()
-        style.configure("Big.TButton", font=(FONT, 11, "bold"), padding=(14, 6))
-        style.configure("TLabel", font=(FONT, 10))
-        style.configure("TCheckbutton", font=(FONT, 10))
-        style.configure("Head.TLabel", font=(FONT, 14, "bold"))
-        style.configure("Column.TLabel", font=(FONT, 11, "bold"))
-        style.configure("Note.TLabel", foreground=GREY, font=(FONT, 9))
+        # Fonts and styles are set by theme.apply (in run) for every new window.
 
         self.build_header()
         self.screen = None  # "home", "live" (its settings), then the recording and results
@@ -154,7 +150,7 @@ class App:
         self.events.put(("update", (version, manual)))
 
     def manual_update(self) -> None:
-        self.update_button.configure(state="disabled", text=t("win.update_checking"))
+        self.more_menu.entryconfigure(0, state="disabled", label=t("win.update_checking"))
         threading.Thread(target=self.check_update, args=(True,), daemon=True).start()
 
     def show_help(self) -> None:
@@ -166,7 +162,7 @@ class App:
 
     def show_update_result(self, version: str | None, manual: bool) -> None:
         if manual:
-            self.update_button.configure(state="normal", text=t("win.update"))
+            self.more_menu.entryconfigure(0, state="normal", label=t("win.update"))
         if version and updates.is_newer(version):
             if sys.platform == "darwin":
                 self.update_macos(version)
@@ -193,34 +189,43 @@ class App:
     # --- layout -----------------------------------------------------------------------------------
 
     def build_header(self) -> None:
-        bar = ttk.Frame(self.root, padding=(14, 12, 14, 8))
-        bar.pack(fill="x")
-        title_box = ttk.Frame(bar)
+        """A coloured app bar with the title, the interface language, the "⋯" menu and, while
+        recording, the timer; the state of the work in its own line below it."""
+        band = tk.Frame(self.root, background=C.header_bg, padx=20, pady=14)
+        band.pack(fill="x")
+        title_box = tk.Frame(band, background=C.header_bg)
         title_box.pack(side="left")
-        ttk.Label(title_box, text=t("win.title"), style="Head.TLabel").pack(anchor="w")
-        ttk.Label(title_box, text=t("win.subtitle"), style="Note.TLabel").pack(anchor="w", pady=(1, 0))
+        tk.Label(title_box, text=t("win.title"), font=(FONT, 17, "bold"), background=C.header_bg,
+                 foreground=C.header_text).pack(anchor="w")
+        tk.Label(title_box, text=t("win.subtitle"), font=(FONT, 9), background=C.header_bg,
+                 foreground=C.header_muted).pack(anchor="w", pady=(1, 0))
         # Top right, before the recording only: a change rebuilds the window around the loaded
         # model, so it is usable once the model is there.
-        self.interface_box = ttk.Frame(bar)
+        self.interface_box = tk.Frame(band, background=C.header_bg)
         self.interface_box.pack(side="right")
-        ttk.Label(self.interface_box, text=t("win.interface"), style="Note.TLabel").pack(side="left", padx=(0, 6))
+        tk.Label(self.interface_box, text=t("win.interface"), font=(FONT, 9), background=C.header_bg,
+                 foreground=C.header_muted).pack(side="left", padx=(0, 6))
         self.interface = ttk.Combobox(self.interface_box, state="readonly", width=10,
                                       values=list(ui_text.LANGUAGES.values()))
         self.interface.current(list(ui_text.LANGUAGES).index(ui_text.language()))
         self.interface.bind("<<ComboboxSelected>>", self.change_interface)
         self.interface.pack(side="left")
-        self.timer = ttk.Label(bar, text="", font=(FONT, 14))
-        self.timer.pack(side="right")
-        self.status = ttk.Label(bar, text=t("win.loading"), foreground=GREY,
-                                font=(FONT, 11))
-        self.status.pack(side="right", padx=16)
-
-        self.tools_frame = ttk.Frame(self.root, padding=(14, 0, 14, 8))
-        self.tools_frame.pack(fill="x")
-        ttk.Button(self.tools_frame, text=t("win.about"), command=self.show_about).pack(side="right")
-        ttk.Button(self.tools_frame, text=t("win.help"), command=self.show_help).pack(side="right", padx=6)
-        self.update_button = ttk.Button(self.tools_frame, text=t("win.update"), command=self.manual_update)
-        self.update_button.pack(side="right")
+        # Updates, help and about: rarely needed, so one menu instead of three buttons.
+        self.more = ttk.Menubutton(band, text="⋯", width=3)
+        self.more_menu = tk.Menu(self.more, tearoff=False)
+        self.more_menu.add_command(label=t("win.update"), command=self.manual_update)
+        self.more_menu.add_command(label=t("win.help"), command=self.show_help)
+        self.more_menu.add_command(label=t("win.about"), command=self.show_about)
+        self.more["menu"] = self.more_menu
+        self.more.pack(side="right", padx=(8, 0), before=self.interface_box)
+        self.timer = tk.Label(band, text="", font=(FONT, 15, "bold"), background=C.header_bg,
+                              foreground=C.header_text)
+        self.timer.pack(side="right", padx=(0, 8))
+        # The state of the work (ready, recording, done...), below the bar in the window's colours.
+        line = ttk.Frame(self.root, padding=(20, 10, 20, 0))
+        line.pack(fill="x")
+        self.status = ttk.Label(line, text=t("win.loading"), foreground=GREY, font=(FONT, 11, "bold"))
+        self.status.pack(anchor="w")
 
     def build_setup(self) -> ttk.Frame:
         frame = ttk.LabelFrame(self.root, text=t("win.before"), padding=12)
@@ -343,23 +348,13 @@ class App:
             widget.grid_remove()
 
         tk.Label(
-            frame, text=t("win.tell_people"), background="#fff3c4", foreground="#5d4300",
+            frame, text=t("win.tell_people"), background=C.warn_bg, foreground=C.warn_text,
             font=(FONT, 10), anchor="w", padx=10, pady=7).grid(
                 row=7, column=0, columnspan=2, sticky="ew", pady=(10, 4))
-        # Aqua ignores custom colours on both ttk.Button and tk.Button. A focusable label keeps
-        # the primary action truly red on macOS while remaining clickable and keyboard-accessible.
-        self.start_enabled = False
-        self.start_button = tk.Label(
-            frame, text=t("win.start"), font=(FONT, 16, "bold"), background="#d7d7d7",
-            foreground="#777777", padx=28, pady=13, cursor="arrow", takefocus=True)
-        self.start_button.bind("<Button-1>", lambda _event: self.start() if self.start_enabled else None)
-        self.start_button.bind("<Return>", lambda _event: self.start() if self.start_enabled else None)
-        self.start_button.bind("<space>", lambda _event: self.start() if self.start_enabled else None)
-        self.start_button.bind("<Enter>", lambda _event: self.start_button.configure(
-            background="#c51f30") if self.start_enabled else None)
-        self.start_button.bind("<Leave>", lambda _event: self.start_button.configure(
-            background="#e32636") if self.start_enabled else None)
-        self.start_button.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(10, 2))
+        # Enabled once the model is loaded (and a translation model, if one is chosen).
+        self.start_button = ttk.Button(frame, text=t("win.start"), style="Huge.Accent.TButton",
+                                       command=self.start, state="disabled")
+        self.start_button.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(12, 2))
         return frame
 
     # --- home screen ------------------------------------------------------------------------------
@@ -377,19 +372,21 @@ class App:
                  ("transcribe", "home.file_title", "home.file_text", "home.file_button",
                   ("#1f6fc5", "#195ba3"), lambda: self.open_files(self.ask_files()))]
         for column, (icon, title, text, button, colours, command) in enumerate(specs):
-            card = tk.Frame(cards, background="white", highlightbackground="#cfcfcf",
+            card = tk.Frame(cards, background=C.surface, highlightbackground=C.border,
                             highlightthickness=1, padx=18, pady=16)
             card.grid(row=0, column=column, sticky="nsew", padx=(0, 6) if column == 0 else (6, 0))
             try:
                 image = tk.PhotoImage(file=os.path.join(ICONS, icon + ".png")).subsample(4)
                 self.home_images.append(image)
-                tk.Label(card, image=image, background="white").pack(pady=(2, 8))
+                tile = tk.Frame(card, background=C.card_icon_bg, padx=12, pady=12)
+                tile.pack(pady=(4, 10))
+                tk.Label(tile, image=image, background=C.card_icon_bg).pack()
             except tk.TclError:
                 pass  # no picture is no reason not to start
-            tk.Label(card, text=t(title), font=(FONT, 16, "bold"), background="white",
-                     foreground="#1f1f1f").pack()
+            tk.Label(card, text=t(title), font=(FONT, 16, "bold"), background=C.surface,
+                     foreground=C.text).pack()
             # Three lines in both cards, so their buttons stay level in every language.
-            tk.Label(card, text=t(text), font=(FONT, 10), background="white", foreground=GREY,
+            tk.Label(card, text=t(text), font=(FONT, 10), background=C.surface, foreground=GREY,
                      wraplength=330, justify="center", height=3, anchor="n").pack(pady=(6, 12))
             primary_label(card, t(button), colours, command, size=13).pack(fill="x")
         self.recent_frame = ttk.Frame(frame)
@@ -406,7 +403,7 @@ class App:
         for item in items:
             line = ttk.Frame(self.recent_frame)
             line.pack(anchor="w", pady=1)
-            link = tk.Label(line, text=item["name"], font=(FONT, 10, "underline"), foreground="#1565c0",
+            link = tk.Label(line, text=item["name"], font=(FONT, 10, "underline"), foreground=C.link,
                             cursor="hand2")
             link.bind("<Button-1>", lambda _event, folder=item["folder"]: tool.open_path(folder))
             link.pack(side="left")
@@ -476,7 +473,7 @@ class App:
     @staticmethod
     def setup_meter(parent) -> tuple:
         """(canvas, bar, note, [time sound was last heard]); the caller places canvas and note."""
-        canvas = tk.Canvas(parent, height=10, width=140, highlightthickness=0, background="#e6e6e6")
+        canvas = tk.Canvas(parent, height=10, width=140, highlightthickness=0, background=C.track)
         bar = canvas.create_rectangle(0, 0, 0, 10, fill=GREEN, width=0)
         note = ttk.Label(parent, text="", style="Note.TLabel")
         return canvas, bar, note, [time.time()]
@@ -606,11 +603,7 @@ class App:
 
     def refresh_start_button(self) -> None:
         enabled = self.model is not None and not self.translation_loading
-        self.start_enabled = enabled
-        self.start_button.configure(
-            background="#e32636" if enabled else "#d7d7d7",
-            foreground="white" if enabled else "#777777",
-            cursor="hand2" if enabled else "arrow")
+        self.start_button.configure(state="normal" if enabled else "disabled")
 
     @staticmethod
     def load_ui_settings(section: str = "live") -> dict:
@@ -680,14 +673,14 @@ class App:
             meters.append(("computer", t("win.meter_computer")))
         for row, (key, title) in enumerate(meters):
             ttk.Label(frame, text=title, width=16).grid(row=row, column=0, sticky="w")
-            canvas = tk.Canvas(frame, height=14, width=360, highlightthickness=0, background="#e6e6e6")
+            canvas = tk.Canvas(frame, height=14, width=360, highlightthickness=0, background=C.track)
             canvas.grid(row=row, column=1, sticky="w", pady=2)
             bar = canvas.create_rectangle(0, 0, 0, 14, fill=GREEN, width=0)
             note = ttk.Label(frame, text="", style="Note.TLabel")
             note.grid(row=row, column=2, sticky="w", padx=8)
             self.meters[key] = (canvas, bar, note, [time.time()])
         self.mic_warning = tk.Label(
-            frame, background="#fff3c4", foreground="#5d4300", font=(FONT, 10), justify="left",
+            frame, background=C.warn_bg, foreground=C.warn_text, font=(FONT, 10), justify="left",
             anchor="w", padx=10, pady=6, wraplength=820,
             text=t("win.mic_warning"))
         return frame
@@ -703,34 +696,34 @@ class App:
         self.text.configure(state="disabled")
         self.to_end = ttk.Button(left, text=t("win.to_end"), command=self.scroll_to_end)
         self.draft_bar = tk.Label(
-            frame, background="#eef2f5", foreground="#555555", font=(FONT, 11, "italic"),
+            frame, background=C.draft_bg, foreground=C.muted, font=(FONT, 11, "italic"),
             anchor="w", justify="left", padx=12, pady=8, wraplength=820)
         # Shown immediately after Stop. Final Whisper chunks and a queued translation can take
         # tens of seconds, so a small status in the title bar is too easy to miss.
         self.stopping_overlay = tk.Frame(
-            frame, background="#fff3c4", highlightbackground="#d6a928",
+            frame, background=C.warn_bg, highlightbackground=C.warn_border,
             highlightthickness=1, padx=28, pady=22)
         tk.Label(
-            self.stopping_overlay, text=t("win.stopping"), background="#fff3c4",
-            foreground="#4f3900", font=(FONT, 14, "bold")).pack(pady=(0, 12))
+            self.stopping_overlay, text=t("win.stopping"), background=C.warn_bg,
+            foreground=C.warn_text, font=(FONT, 14, "bold")).pack(pady=(0, 12))
         self.stop_stage_recorded = tk.Label(
-            self.stopping_overlay, text="✓  " + t("win.stage_recorded"), background="#fff3c4",
+            self.stopping_overlay, text="✓  " + t("win.stage_recorded"), background=C.warn_bg,
             foreground=GREEN, font=(FONT, 11), anchor="w")
         self.stop_stage_recorded.pack(fill="x", pady=2)
         self.stop_stage_phrases = tk.Label(
-            self.stopping_overlay, text="●  " + t("win.stage_phrases"), background="#fff3c4",
-            foreground="#4f3900", font=(FONT, 11, "bold"), anchor="w")
+            self.stopping_overlay, text="●  " + t("win.stage_phrases"), background=C.warn_bg,
+            foreground=C.warn_text, font=(FONT, 11, "bold"), anchor="w")
         self.stop_stage_phrases.pack(fill="x", pady=2)
         self.stop_stage_translation = tk.Label(
-            self.stopping_overlay, text="○  " + t("win.stage_translation"), background="#fff3c4",
+            self.stopping_overlay, text="○  " + t("win.stage_translation"), background=C.warn_bg,
             foreground=GREY, font=(FONT, 11), anchor="w")
         self.stop_stage_translation.pack(fill="x", pady=2)
         self.stopping_progress = ttk.Progressbar(
             self.stopping_overlay, mode="indeterminate", length=320)
         self.stopping_progress.pack(fill="x", pady=(12, 8))
         tk.Label(
-            self.stopping_overlay, text=t("win.stopping_safe"), background="#fff3c4",
-            foreground="#5d4300", font=(FONT, 9)).pack()
+            self.stopping_overlay, text=t("win.stopping_safe"), background=C.warn_bg,
+            foreground=C.warn_text, font=(FONT, 9)).pack()
         return frame
 
     @staticmethod
@@ -741,8 +734,9 @@ class App:
         # Tk on macOS inherits the system text colour even though this widget has an explicit
         # light background. In Dark Mode that produces white text on an almost white field.
         text = tk.Text(column, wrap="word", font=(FONT, 13), padx=12, pady=10, relief="flat",
-                       background="#fbfbfb", foreground="#1f1f1f", insertbackground="#1f1f1f",
-                       selectbackground="#b7d7f5", selectforeground="#111111", spacing3=4, height=8)
+                       background=C.field, foreground=C.text, insertbackground=C.text,
+                       selectbackground=C.selection, selectforeground=C.text, spacing3=4, height=8,
+                       highlightthickness=1, highlightbackground=C.border, highlightcolor=C.border)
         scroll = ttk.Scrollbar(column, command=text.yview)
         text.configure(yscrollcommand=scroll.set)
         scroll.pack(side="right", fill="y")
@@ -752,7 +746,7 @@ class App:
     def add_translation_column(self, name: str) -> None:
         right, self.translation_text = self.text_column(self.panes, t("win.translation_head", language=name))
         self.translation_column = right
-        self.translation_text.configure(background="#f6f8fb", state="disabled")
+        self.translation_text.configure(background=C.field_alt, state="disabled")
         self.panes.add(right, weight=1)
         self.translation_view_button.configure(text=t("win.hide_translation"))
         self.translation_view_button.pack(side="right", padx=(0, 12))
@@ -780,8 +774,8 @@ class App:
             self.shot_note.pack(side="left", padx=(6, 0))
         ttk.Button(frame, text=t("win.open_folder"), command=self.open_folder).pack(side="left", padx=(12, 0))
         ttk.Button(frame, text=t("win.copy"), command=self.copy_text).pack(side="left", padx=(6, 0))
-        ttk.Button(frame, text="A+", width=4, command=lambda: self.change_size(1)).pack(side="right")
-        ttk.Button(frame, text="A−", width=4, command=lambda: self.change_size(-1)).pack(side="right", padx=(0, 4))
+        ttk.Button(frame, text="A+", width=3, style="Toolbutton", command=lambda: self.change_size(1)).pack(side="right")
+        ttk.Button(frame, text="A−", width=3, style="Toolbutton", command=lambda: self.change_size(-1)).pack(side="right", padx=(0, 4))
         self.translation_view_button = ttk.Button(frame, command=self.toggle_translation_column)
         return frame
 
@@ -791,12 +785,12 @@ class App:
                 continue
             text.configure(font=(FONT, self.text_size))
             text.tag_configure("time", foreground=GREY, font=(FONT, max(8, self.text_size - 3)))
-            text.tag_configure("draft", foreground="#737373", font=(FONT, self.text_size, "italic"))
-            text.tag_configure("hint", foreground="#666666")
-            text.tag_configure("info", foreground="#595959", font=(FONT, max(8, self.text_size - 3), "italic"))
-            text.tag_configure("me", foreground="#1565c0", font=(FONT, self.text_size, "bold"))
-            text.tag_configure("others", foreground="#2e7d32", font=(FONT, self.text_size, "bold"))
-            text.tag_configure("shot", foreground="#1565c0", underline=True, font=(FONT, max(8, self.text_size - 2)))
+            text.tag_configure("draft", foreground=C.muted, font=(FONT, self.text_size, "italic"))
+            text.tag_configure("hint", foreground=C.muted)
+            text.tag_configure("info", foreground=C.muted, font=(FONT, max(8, self.text_size - 3), "italic"))
+            text.tag_configure("me", foreground=C.link, font=(FONT, self.text_size, "bold"))
+            text.tag_configure("others", foreground=GREEN, font=(FONT, self.text_size, "bold"))
+            text.tag_configure("shot", foreground=C.link, underline=True, font=(FONT, max(8, self.text_size - 2)))
             for number, colour in enumerate(VOICE_COLOURS):
                 text.tag_configure(f"voice{number}", foreground=colour, font=(FONT, self.text_size, "bold"))
 
@@ -852,7 +846,6 @@ class App:
         self.screen = "recording"
         self.back_bar.pack_forget()
         self.setup_frame.pack_forget()
-        self.tools_frame.pack_forget()
         self.interface_box.pack_forget()  # the interface language is chosen before the recording
         self.text_frame.pack_forget()
         self.meters_frame.pack(fill="x", padx=14, pady=(0, 6))
@@ -1121,7 +1114,6 @@ class App:
             top = max(0, min(self.root.winfo_y(), screen_height - wanted - 60))
             self.root.geometry(f"{max(self.root.winfo_width(), 900)}x{wanted}+{self.root.winfo_x()}+{top}")
         self.after_frame = frame
-        self.tools_frame.pack(fill="x")
         set_icon(self.root, recording=False)
         if self.pending_update:
             pending, self.pending_update = self.pending_update, None
@@ -1139,7 +1131,7 @@ class App:
         frame.pack(fill="x", padx=14, pady=(0, 8))
         # The processing log, under "Details": shown on request and when something failed.
         self.log_frame, self.log_text = self.text_column(self.root)
-        self.log_text.configure(font=(FONT, 9), foreground="#444444", height=10, state="disabled")
+        self.log_text.configure(font=(FONT, 9), foreground=C.text, height=10, state="disabled")
         if not file_mode:  # the meeting's own text; a recording from elsewhere has none to show
             self.text_frame.pack(fill="both", expand=True, padx=14, pady=(0, 8))
         if file_mode:
@@ -1226,7 +1218,7 @@ class App:
         self.summary_box.grid(row=8, column=0, columnspan=3, sticky="w", pady=(8, 2))
         # With one AI ready, the other one can still be connected (the wizard opens on it).
         self.other_ai_link = tk.Label(frame, text=t("win.install_other"), font=(FONT, 9, "underline"),
-                                      foreground="#1565c0", cursor="hand2", takefocus=True)
+                                      foreground=C.link, cursor="hand2", takefocus=True)
         for sequence in ("<Button-1>", "<Return>", "<space>"):
             self.other_ai_link.bind(sequence, lambda _event: self.show_ai_install())
         self.other_ai_link.grid(row=8, column=2, sticky="e", pady=(8, 2))
@@ -1250,12 +1242,12 @@ class App:
         self.ai_warning.grid(row=12, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=(2, 4))
         # Without any usable AI its options are hidden; this says what to install instead.
         self.ai_state = "searching"  # then "ready" or "none"
-        self.no_ai_panel = tk.Frame(frame, background="#fff3c4", padx=10, pady=8)
-        tk.Label(self.no_ai_panel, text=t("win.no_ai_install"), background="#fff3c4", foreground="#5d4300",
+        self.no_ai_panel = tk.Frame(frame, background=C.warn_bg, padx=10, pady=8)
+        tk.Label(self.no_ai_panel, text=t("win.no_ai_install"), background=C.warn_bg, foreground=C.warn_text,
                  font=(FONT, 10), justify="left", anchor="w", wraplength=740).pack(anchor="w", fill="x")
-        self.no_ai_reasons = tk.Label(self.no_ai_panel, background="#fff3c4", foreground="#5d4300",
+        self.no_ai_reasons = tk.Label(self.no_ai_panel, background=C.warn_bg, foreground=C.warn_text,
                                       font=(FONT, 9), justify="left", anchor="w", wraplength=740)
-        buttons = tk.Frame(self.no_ai_panel, background="#fff3c4")
+        buttons = tk.Frame(self.no_ai_panel, background=C.warn_bg)
         buttons.pack(anchor="w", pady=(6, 0), side="bottom")
         self.search_again_button = ttk.Button(buttons, text=t("win.search_again"), command=self.search_ai)
         self.search_again_button.pack(side="left")
@@ -1268,17 +1260,8 @@ class App:
             self.delete_box.grid(row=13, column=0, columnspan=3, sticky="w", pady=(8, 2))
         buttons = ttk.Frame(frame)
         buttons.grid(row=14, column=0, columnspan=3, sticky="w", pady=(10, 0))
-        # Aqua ignores custom colours on tk.Button, making this primary action look like a faint
-        # secondary control. A focusable label preserves the intended contrast on macOS.
-        self.run_button = tk.Label(
-            buttons, text=t("win.run"), font=(FONT, 13, "bold"),
-            background="#168447", foreground="white", padx=24, pady=10,
-            cursor="hand2", takefocus=True)
-        self.run_button.bind("<Button-1>", lambda _event: self.run_processing())
-        self.run_button.bind("<Return>", lambda _event: self.run_processing())
-        self.run_button.bind("<space>", lambda _event: self.run_processing())
-        self.run_button.bind("<Enter>", lambda _event: self.run_button.configure(background="#106a38"))
-        self.run_button.bind("<Leave>", lambda _event: self.run_button.configure(background="#168447"))
+        self.run_button = ttk.Button(buttons, text=t("win.run"), style="Big.Accent.TButton",
+                                     command=self.run_processing)
         self.run_button.pack(side="left")
         # Takes the place of Run while the processing runs.
         self.cancel_button = ttk.Button(buttons, text=t("win.cancel"), style="Big.TButton",
@@ -1308,7 +1291,7 @@ class App:
         self.details_buttons[0].pack(side="right")
         # When it is done: the results first, with the main text as the primary action.
         frame.columnconfigure(2, weight=1)  # the results panel spans the whole width
-        self.done_panel = tk.Frame(frame, background="#eef7f0", highlightbackground="#9cc9a8",
+        self.done_panel = tk.Frame(frame, background=C.success_bg, highlightbackground=C.success_border,
                                    highlightthickness=1, padx=14, pady=12)
         self.steps = []
         self.refresh_export()
@@ -1516,8 +1499,10 @@ class App:
         ("Summary with", "summary", "active"), ("Summary done", "summary", "done"),
         ("Summary exists", "summary", "done"), ("Summary FAILED", "summary", "failed"),
     ]
-    STEP_MARKS = {"pending": ("○", GREY, False), "active": ("●", "#1f1f1f", True), "done": ("✓", GREEN, False),
-                  "skipped": ("–", GREY, False), "failed": ("✗", RED, True)}
+    @staticmethod
+    def step_mark(state: str) -> tuple[str, str, bool]:
+        return {"pending": ("○", GREY, False), "active": ("●", C.text, True), "done": ("✓", GREEN, False),
+                "skipped": ("–", GREY, False), "failed": ("✗", RED, True)}[state]
 
     def build_steps(self) -> None:
         """The steps this run will take, from the chosen options."""
@@ -1567,9 +1552,9 @@ class App:
         if state == "active" and step["state"] in ("done", "failed", "skipped"):
             return  # e.g. "Waiting for the voice separation" after it already finished
         step["state"] = state
-        symbol, colour, bold = self.STEP_MARKS[state]
+        symbol, colour, bold = self.step_mark(state)
         step["mark"].configure(text=symbol, foreground=colour)
-        step["name"].configure(foreground="#1f1f1f" if state != "pending" else GREY,
+        step["name"].configure(foreground=C.text if state != "pending" else GREY,
                                font=(FONT, 10, "bold") if bold else (FONT, 10))
         if detail is not None:
             step["detail"].configure(text=detail)
@@ -1857,8 +1842,8 @@ class App:
         panel = self.done_panel
         for child in panel.winfo_children():
             child.destroy()
-        background = "#fdecea" if failed else "#eef7f0"
-        panel.configure(background=background, highlightbackground="#e3a6a0" if failed else "#9cc9a8")
+        background = C.error_bg if failed else C.success_bg
+        panel.configure(background=background, highlightbackground=C.error_border if failed else C.success_border)
         took = about_minutes(time.time() - self.processing_started)
         title = ("⚠  " + t("win.done_with_errors")) if failed else ("✓  " + t("win.done_in", time=took))
         tk.Label(panel, text=title, font=(FONT, 13, "bold"), foreground=RED if failed else GREEN,
@@ -1887,7 +1872,7 @@ class App:
             ttk.Button(line, text=t("win.export_html"), command=self.export_html).pack(side="left", padx=(6, 0))
         details = ttk.Button(line, text=t("win.details_show"), command=self.toggle_details)
         details.pack(side="right")
-        again = tk.Label(line, text=t("win.run_again"), font=(FONT, 10, "underline"), foreground="#1565c0",
+        again = tk.Label(line, text=t("win.run_again"), font=(FONT, 10, "underline"), foreground=C.link,
                          background=background, cursor="hand2", takefocus=True)
         for sequence in ("<Button-1>", "<Return>", "<space>"):
             again.bind(sequence, lambda _event: self.run_again())
@@ -1942,7 +1927,7 @@ class App:
                         self.stop_stage_phrases.configure(
                             text="✓  " + t("win.stage_phrases"), foreground=GREEN, font=(FONT, 11))
                         self.stop_stage_translation.configure(
-                            text="●  " + t("win.stage_translation"), foreground="#4f3900",
+                            text="●  " + t("win.stage_translation"), foreground=C.warn_text,
                             font=(FONT, 11, "bold"))
                 elif kind == "stop_failed":
                     self.stopping_progress.stop()
@@ -2044,8 +2029,11 @@ class AiSetupDialog:
     that the window keeps up to date by itself until the AI is ready. The commands are there too,
     folded away, for those who want to see or copy them. Closing it looks for the AIs again."""
 
-    COLOURS = {"checking": ("#f0f0f0", GREY), "missing": ("#f0f0f0", "#444444"),
-               "login": ("#fff3c4", "#5d4300"), "ready": ("#e6f4ea", GREEN), "started": ("#e8f0fb", "#174a85")}
+    @staticmethod
+    def colours(state: str) -> tuple[str, str]:
+        return {"checking": (C.neutral_bg, GREY), "missing": (C.neutral_bg, C.text),
+                "login": (C.warn_bg, C.warn_text), "ready": (C.success_bg, GREEN),
+                "started": (C.info_bg, C.info_text)}[state]
 
     def __init__(self, app: "App", engine: str | None = None):
         """engine: open straight on it (the one AI not ready yet), instead of the choice."""
@@ -2058,6 +2046,7 @@ class AiSetupDialog:
         self.window.title(t("setup.title"))
         self.window.minsize(640, 420)
         self.window.transient(app.root)
+        theme.title_bar(self.window)
         self.window.protocol("WM_DELETE_WINDOW", self.close)
         self.window.bind("<Escape>", lambda _event: self.close())
         self.page = None
@@ -2088,15 +2077,15 @@ class AiSetupDialog:
         cards.pack(fill="x")
         cards.columnconfigure((0, 1), weight=1, uniform="card")
         for column, engine in enumerate(("claude", "codex")):
-            card = tk.Frame(cards, background="white", highlightbackground="#cfcfcf", highlightthickness=1,
+            card = tk.Frame(cards, background=C.surface, highlightbackground=C.border, highlightthickness=1,
                             padx=16, pady=14)
             card.grid(row=0, column=column, sticky="nsew", padx=(0, 6) if column == 0 else (6, 0))
-            tk.Label(card, text=t(f"setup.{engine}_account"), font=(FONT, 14, "bold"), background="white").pack()
-            tk.Label(card, text=t(f"setup.{engine}_need"), font=(FONT, 10), foreground=GREY, background="white",
+            tk.Label(card, text=t(f"setup.{engine}_account"), font=(FONT, 14, "bold"), background=C.surface).pack()
+            tk.Label(card, text=t(f"setup.{engine}_need"), font=(FONT, 10), foreground=GREY, background=C.surface,
                      wraplength=260, justify="center", height=4, anchor="n").pack(pady=(4, 10))
             # What the card offers depends on the AI's state on this computer, checked below:
             # connect it, only sign in, or nothing to do (connected).
-            holder = tk.Frame(card, background="white")
+            holder = tk.Frame(card, background=C.surface)
             holder.pack(fill="x")
             self.card_actions[engine] = holder
             self.show_card(engine, "checking", "")
@@ -2106,7 +2095,7 @@ class AiSetupDialog:
         ttk.Label(line, text=t("setup.no_account"), style="Note.TLabel").pack(side="left")
         for engine in ("claude", "codex"):
             link = tk.Label(line, text=ai_install.SIGN_UP[engine].split("//")[1], font=(FONT, 9, "underline"),
-                            foreground="#1565c0", cursor="hand2")
+                            foreground=C.link, cursor="hand2")
             link.bind("<Button-1>", lambda _event, e=engine: webbrowser.open(ai_install.SIGN_UP[e]))
             link.pack(side="left", padx=(6, 0))
         ttk.Button(page, text=t("win.close"), command=self.close).pack(side="bottom", anchor="e")
@@ -2127,13 +2116,13 @@ class AiSetupDialog:
             child.destroy()
         if state == "checking":
             tk.Label(holder, text=t("setup.state_checking"), font=(FONT, 10), foreground=GREY,
-                     background="white", pady=8).pack(fill="x")
+                     background=C.surface, pady=8).pack(fill="x")
             return
         if state == "ready":
             tk.Label(holder, text="✓  " + t("setup.card_ready"), font=(FONT, 11, "bold"), foreground=GREEN,
-                     background="#e6f4ea", pady=8).pack(fill="x")
+                     background=C.success_bg, pady=8).pack(fill="x")
             if "@" in account:
-                tk.Label(holder, text=account, font=(FONT, 9), foreground=GREY, background="white").pack(pady=(3, 0))
+                tk.Label(holder, text=account, font=(FONT, 9), foreground=GREY, background=C.surface).pack(pady=(3, 0))
             return
         label = t("setup.choose", name=self.name(engine)) if state == "missing" else t("setup.card_login")
         primary_label(holder, label, ("#1f6fc5", "#195ba3"), lambda e=engine: self.show_engine(e),
@@ -2148,7 +2137,7 @@ class AiSetupDialog:
         name = self.name(engine)
         page = self.new_page()
         back = tk.Label(page, text="← " + t("setup.back_to_choice"), font=(FONT, 10, "underline"),
-                        foreground="#1565c0", cursor="hand2")
+                        foreground=C.link, cursor="hand2")
         back.bind("<Button-1>", lambda _event: self.show_choice())
         back.pack(anchor="w")
         ttk.Label(page, text=t("setup.connect", name=name), font=(FONT, 16, "bold")).pack(anchor="w", pady=(8, 8))
@@ -2165,7 +2154,7 @@ class AiSetupDialog:
         for number, text in enumerate(steps, start=1):
             row = ttk.Frame(self.steps_frame)
             row.pack(fill="x", pady=3)
-            tk.Label(row, text=str(number), font=(FONT, 11, "bold"), foreground="white", background="#1f6fc5",
+            tk.Label(row, text=str(number), font=(FONT, 11, "bold"), foreground=C.on_accent, background=C.accent,
                      width=2).pack(side="left", anchor="n", padx=(0, 10))
             ttk.Label(row, text=text, font=(FONT, 11), wraplength=560, justify="left").pack(side="left", anchor="w")
         self.action_line = ttk.Frame(page)
@@ -2204,7 +2193,7 @@ class AiSetupDialog:
     def show_state(self, account: str = "") -> None:
         name = self.name(self.engine)
         shown = "started" if self.started and self.state in ("missing", "login") else self.state
-        background, foreground = self.COLOURS[shown]
+        background, foreground = self.colours(shown)
         if "@" not in account:
             account = ""  # Codex says only "ChatGPT" here, which the name already says
         # The steps are what still has to happen: gone once the AI is ready.
@@ -2372,17 +2361,11 @@ def draw_level(canvas: tk.Canvas, bar, level: float) -> float:
     return decibels
 
 
-def primary_label(parent, text: str, colours: tuple[str, str], command, size: int = 13) -> tk.Label:
-    """A coloured primary action. Aqua ignores custom colours on buttons, so it is a focusable
-    label that reacts to the mouse, Return and Space."""
-    normal, hover = colours
-    label = tk.Label(parent, text=text, font=(FONT, size, "bold"), background=normal, foreground="white",
-                     padx=20, pady=9, cursor="hand2", takefocus=True)
-    for sequence in ("<Button-1>", "<Return>", "<space>"):
-        label.bind(sequence, lambda _event: command())
-    label.bind("<Enter>", lambda _event: label.configure(background=hover))
-    label.bind("<Leave>", lambda _event: label.configure(background=normal))
-    return label
+def primary_label(parent, text: str, colours, command, size: int = 13) -> ttk.Button:
+    """A primary action: the theme's accent button, larger for the main ones. (colours is left
+    from the time these were coloured labels; one accent colour is used now.)"""
+    style = "Big.Accent.TButton" if size >= 12 else "Accent.TButton"
+    return ttk.Button(parent, text=text, command=command, style=style)
 
 
 # The home screen's recent results: only names and folder paths of this computer, never content.
@@ -2423,7 +2406,7 @@ def set_icon(root: tk.Tk, recording: bool = False) -> None:
 
 
 def run(args) -> int:
-    global FONT
+    global FONT, GREY, RED, GREEN, VOICE_COLOURS
     if os.name == "nt":
         try:
             ctypes.windll.shcore.SetProcessDpiAwareness(1)  # sharp text on high-DPI screens
@@ -2441,6 +2424,8 @@ def run(args) -> int:
         elif os.name != "nt":
             families = set(tkfont.families(root))
             FONT = next((name for name in LINUX_FONTS if name in families), "TkDefaultFont")
+        theme.apply(root, FONT)  # light or dark, as the system is set
+        GREY, RED, GREEN, VOICE_COLOURS = C.muted, C.error, C.success, C.voices
         app = App(root, args, loaded)
         root.mainloop()
         if app.restart is False:
