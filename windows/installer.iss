@@ -43,7 +43,7 @@ VersionInfoDescription=Live Transcription installer
 VersionInfoProductName=Live Transcription
 VersionInfoProductVersion={#MyAppVersion}.0
 VersionInfoCompany=sbaranau
-VersionInfoCopyright=MIT License, sbaranau
+VersionInfoCopyright=Copyright (c) 2026 sbaranau, MIT License
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

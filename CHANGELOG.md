@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Icons: the app's icon in the app bar, and small icons from the system's icon font before the
+  section headings (meeting setup, transcription of a recording, results, transcript,
+  translation, recent results, AI setup) on Windows.
+- Copyright and author: "© 2026 sbaranau · MIT License" with the version at the bottom of the home
+  screen and in About, and in the Windows installer's and the macOS app's file information.
+
 ## v1.33 — 2026-11-20
 
 - A modern look: the window uses the Sun Valley theme (sv-ttk, the Windows 11 Fluent style, also

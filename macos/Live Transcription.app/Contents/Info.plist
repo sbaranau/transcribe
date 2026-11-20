@@ -22,6 +22,8 @@
 	<string>11.0</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 sbaranau · MIT License</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Live Transcription needs microphone access to transcribe your speech locally on this Mac.</string>
 </dict>

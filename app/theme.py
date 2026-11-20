@@ -40,6 +40,18 @@ DARK = dict(
     card_icon_bg="#22324a",
 )
 
+# Headings carry a small icon from the system's icon font (Windows 11: Segoe Fluent Icons,
+# Windows 10: Segoe MDL2 Assets, same code points); elsewhere they have none.
+ICON_FONT = None
+GLYPHS = {"settings": "\ue713", "page": "\ue8a5", "results": "\ue9d5", "transcript": "\ue8bd",
+          "translation": "\ue8c1", "history": "\ue81c", "ai": "\ue99a"}
+COPYRIGHT = "© 2026 sbaranau · MIT License"
+
+
+def glyph(name: str) -> str:
+    return GLYPHS.get(name, "") if ICON_FONT else ""
+
+
 # The current palette; apply() fills it. live_gui reads it when it builds its widgets.
 C = SimpleNamespace(dark=False, **LIGHT)
 
@@ -67,6 +79,10 @@ def system_is_dark() -> bool:
 
 def apply(root, font: str) -> SimpleNamespace:
     """Sets the theme on a new Tk root and returns the palette (also in theme.C)."""
+    global ICON_FONT
+    from tkinter import font as tkfont
+    families = set(tkfont.families(root))
+    ICON_FONT = next((name for name in ("Segoe Fluent Icons", "Segoe MDL2 Assets") if name in families), None)
     dark = system_is_dark()
     C.__dict__.update(DARK if dark else LIGHT, dark=dark)
     try:

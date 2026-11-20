@@ -158,7 +158,8 @@ class App:
 
     def show_about(self) -> None:
         messagebox.showinfo(t("win.about"), t(
-            "win.about_text", version=updates.current_version(), folder=paths.DATA_DIR))
+            "win.about_text", version=updates.current_version(), folder=paths.DATA_DIR)
+            + "\n\n" + theme.COPYRIGHT + "\nhttps://github.com/sbaranau/transcribe")
 
     def show_update_result(self, version: str | None, manual: bool) -> None:
         if manual:
@@ -193,6 +194,11 @@ class App:
         recording, the timer; the state of the work in its own line below it."""
         band = tk.Frame(self.root, background=C.header_bg, padx=20, pady=14)
         band.pack(fill="x")
+        try:
+            self.header_icon = tk.PhotoImage(file=os.path.join(ICONS, "live.png")).subsample(6)
+            tk.Label(band, image=self.header_icon, background=C.header_bg).pack(side="left", padx=(0, 14))
+        except tk.TclError:
+            pass  # no picture is no reason not to start
         title_box = tk.Frame(band, background=C.header_bg)
         title_box.pack(side="left")
         tk.Label(title_box, text=t("win.title"), font=(FONT, 17, "bold"), background=C.header_bg,
@@ -228,7 +234,8 @@ class App:
         self.status.pack(anchor="w")
 
     def build_setup(self) -> ttk.Frame:
-        frame = ttk.LabelFrame(self.root, text=t("win.before"), padding=12)
+        frame = ttk.LabelFrame(self.root, padding=12)
+        frame.configure(labelwidget=heading(frame, "settings", t("win.before")))
         frame.columnconfigure(1, weight=1)
         self.advanced_visible = False
         self.advanced_widgets = []
@@ -389,6 +396,8 @@ class App:
             tk.Label(card, text=t(text), font=(FONT, 10), background=C.surface, foreground=GREY,
                      wraplength=330, justify="center", height=3, anchor="n").pack(pady=(6, 12))
             primary_label(card, t(button), colours, command, size=13).pack(fill="x")
+        ttk.Label(frame, text=f"Live Transcription {updates.current_version()}  ·  {theme.COPYRIGHT}",
+                  style="Note.TLabel").pack(side="bottom", anchor="w", pady=(12, 0))
         self.recent_frame = ttk.Frame(frame)
         self.recent_frame.pack(fill="x", pady=(18, 0))
         return frame
@@ -399,7 +408,8 @@ class App:
         items = load_recent()
         if not items:
             return
-        ttk.Label(self.recent_frame, text=t("home.recent"), style="Note.TLabel").pack(anchor="w", pady=(0, 4))
+        heading(self.recent_frame, "history", t("home.recent"), size=9, foreground=C.muted).pack(
+            anchor="w", pady=(0, 6))
         for item in items:
             line = ttk.Frame(self.recent_frame)
             line.pack(anchor="w", pady=1)
@@ -727,10 +737,10 @@ class App:
         return frame
 
     @staticmethod
-    def text_column(parent, title: str | None = None) -> tuple[ttk.Frame, tk.Text]:
+    def text_column(parent, title: str | None = None, icon: str = "transcript") -> tuple[ttk.Frame, tk.Text]:
         column = ttk.Frame(parent)
         if title:
-            ttk.Label(column, text=title, style="Column.TLabel").pack(anchor="w", padx=4, pady=(0, 5))
+            heading(column, icon, title).pack(anchor="w", padx=4, pady=(0, 6))
         # Tk on macOS inherits the system text colour even though this widget has an explicit
         # light background. In Dark Mode that produces white text on an almost white field.
         text = tk.Text(column, wrap="word", font=(FONT, 13), padx=12, pady=10, relief="flat",
@@ -744,7 +754,7 @@ class App:
         return column, text
 
     def add_translation_column(self, name: str) -> None:
-        right, self.translation_text = self.text_column(self.panes, t("win.translation_head", language=name))
+        right, self.translation_text = self.text_column(self.panes, t("win.translation_head", language=name), "translation")
         self.translation_column = right
         self.translation_text.configure(background=C.field_alt, state="disabled")
         self.panes.add(right, weight=1)
@@ -1105,8 +1115,9 @@ class App:
         self.timer.configure(text="")
         gc.collect()
 
-        frame = ttk.LabelFrame(self.root, text=t("win.files_after") if file_mode else t("win.after"),
-                               padding=12)
+        frame = ttk.LabelFrame(self.root, padding=12)
+        frame.configure(labelwidget=heading(frame, "page" if file_mode else "results",
+                                            (t("win.files_after") if file_mode else t("win.after")).strip()))
         # Room for the options, the progress and some lines of the processing log below them.
         screen_height = self.root.winfo_screenheight()
         wanted = min(screen_height - 90, 1000)
@@ -2070,7 +2081,7 @@ class AiSetupDialog:
         self.engine = None
         self.card_actions = {}
         page = self.new_page()
-        ttk.Label(page, text=t("setup.title"), font=(FONT, 16, "bold")).pack(anchor="w")
+        heading(page, "ai", t("setup.title"), size=16).pack(anchor="w")
         ttk.Label(page, text=t("setup.intro"), font=(FONT, 11), wraplength=620, justify="left").pack(
             anchor="w", pady=(6, 14))
         cards = ttk.Frame(page)
@@ -2350,6 +2361,18 @@ def clock_seconds(clock: str) -> float:
 
 def about_minutes(seconds: float) -> str:
     return t("step.minutes", n=round(seconds / 60)) if seconds >= 90 else t("step.under_minutes")
+
+
+def heading(parent, icon: str, text: str, size: int = 11, foreground: str | None = None) -> tk.Frame:
+    """A heading with a small icon before it (theme.GLYPHS); without an icon font only the text."""
+    frame = tk.Frame(parent, background=C.bg)
+    symbol = theme.glyph(icon)
+    if symbol:
+        tk.Label(frame, text=symbol, font=(theme.ICON_FONT, size + 1), background=C.bg,
+                 foreground=C.link).pack(side="left", padx=(0, 7))
+    tk.Label(frame, text=text, font=(FONT, size, "bold"), background=C.bg,
+             foreground=foreground or C.text).pack(side="left")
+    return frame
 
 
 def draw_level(canvas: tk.Canvas, bar, level: float) -> float:
