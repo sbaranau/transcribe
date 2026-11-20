@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.30 — 2026-11-20
 
 - With one AI ready, "Connect another AI…" next to the summary option opens the wizard straight
   on the other one (Claude or ChatGPT, whichever is not ready yet).
