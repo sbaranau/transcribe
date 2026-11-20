@@ -134,7 +134,17 @@ def find_npm_tool(name: str) -> str | None:
 
 
 def find_codex() -> str | None:
-    return find_npm_tool("codex")
+    found = find_npm_tool("codex")
+    if found:
+        return found
+    # Applications opened from Finder do not inherit the PATH configured in .zprofile.
+    # The official standalone installer uses ~/.local/bin; keep Homebrew as a fallback.
+    if sys.platform == "darwin":
+        for fallback in (os.path.expanduser("~/.local/bin/codex"),
+                         "/opt/homebrew/bin/codex", "/usr/local/bin/codex"):
+            if os.path.isfile(fallback):
+                return fallback
+    return None
 
 
 # The command-line AI tools besides Claude Code and Codex: all installed with npm, each logged
@@ -174,7 +184,7 @@ def find_engines() -> dict[str, str]:
 
 def classify(entered: str) -> tuple[str, str] | None:
     """Engine and location for a path or address the user typed, or None if it does not work."""
-    entered = entered.strip().strip('"')
+    entered = os.path.expanduser(entered.strip().strip('"'))
     if entered.lower().startswith(("http://", "https://")):
         return ("local", entered.rstrip("/")) if local_models(entered) else None
     tools = ["claude", "codex", *CLI_TOOLS]

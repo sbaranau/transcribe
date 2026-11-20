@@ -1220,6 +1220,9 @@ class App:
         self.path_entry.pack(side="left")
         self.try_button = ttk.Button(entry_line, text=t("win.try_path"), command=self.try_path)
         self.try_button.pack(side="left", padx=6)
+        if sys.platform == "darwin":
+            ttk.Button(entry_line, text=t("win.install_ai"), command=self.show_ai_install).pack(
+                side="left", padx=(2, 0))
         self.ai_warning = ttk.Label(frame, foreground=RED, wraplength=760, text=t("win.ai_rules"))
         self.ai_warning.grid(row=12, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=(2, 4))
         # Without any usable AI its options are hidden; this says what to install instead.
@@ -1363,6 +1366,12 @@ class App:
         self.refresh_after()
 
     def try_path(self) -> None:
+        if not self.path_entry.get().strip():
+            usable, left_out = ai_engines.verify_engines(ai_engines.find_engines())
+            self.show_ai(usable, left_out)
+            if not usable:
+                messagebox.showwarning(t("win.not_found_title"), t("ai.path_wrong").strip())
+            return
         result = ai_engines.classify(self.path_entry.get())
         if not result:
             messagebox.showwarning(t("win.not_found_title"), t("ai.path_wrong").strip())
@@ -1374,6 +1383,55 @@ class App:
             return
         ai_engines.remember(*result)
         self.show_ai(usable, {})
+
+    def show_ai_install(self) -> None:
+        """Show copyable, beginner-friendly installation steps for the packaged macOS app."""
+        dialog = tk.Toplevel(self.root)
+        dialog.title(t("win.install_ai_title"))
+        dialog.geometry("760x610")
+        dialog.minsize(620, 460)
+        dialog.transient(self.root)
+        ttk.Label(dialog, text=t("win.install_ai_title"), font=(FONT, 16, "bold")).pack(
+            anchor="w", padx=22, pady=(20, 6))
+        ttk.Label(dialog, text=t("win.install_ai_copy"), wraplength=710, justify="left").pack(
+            anchor="w", padx=22, pady=(0, 10))
+        instructions = """CODEX CLI (ChatGPT)
+
+1. Install Codex for the current user (no administrator password or Homebrew needed):
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
+
+2. Add the user programs folder to PATH:
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zprofile
+export PATH="$HOME/.local/bin:$PATH"
+
+3. Log in and check:
+codex login
+codex login status
+
+
+CLAUDE CODE
+
+1. Install Claude Code:
+curl -fsSL https://claude.ai/install.sh | bash
+
+2. Add it to PATH:
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zprofile
+export PATH="$HOME/.local/bin:$PATH"
+
+3. Start Claude, select your account type and complete login in the browser:
+claude
+
+After installation, paste this into the Path field if automatic detection still fails:
+Codex: ~/.local/bin/codex
+Claude: ~/.local/bin/claude
+"""
+        text = tk.Text(dialog, wrap="word", font=("Menlo", 11), padx=12, pady=12)
+        text.insert("1.0", instructions)
+        text.configure(state="disabled")
+        text.pack(fill="both", expand=True, padx=22, pady=(0, 12))
+        ttk.Button(dialog, text=t("win.close"), command=dialog.destroy).pack(pady=(0, 18))
+        dialog.bind("<Escape>", lambda _event: dialog.destroy())
+        dialog.grab_set()
 
     def run_processing(self) -> None:
         if not (self.redo.get() or self.summary.get() or self.translate.get()):

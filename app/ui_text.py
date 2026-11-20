@@ -348,6 +348,16 @@ TEXTS = {
                  "Путь к claude, codex, gemini, copilot или qwen (или к их папке), или адрес локального сервера, "
                  "например http://127.0.0.1:11434:"),
     "win.try_path": ("Check", "Prüfen", "Проверить"),
+    "win.install_ai": ("How to install an AI on macOS", "KI unter macOS installieren",
+                       "Как установить ИИ на macOS"),
+    "win.install_ai_title": ("Install Codex CLI or Claude Code", "Codex CLI oder Claude Code installieren",
+                             "Установка Codex CLI или Claude Code"),
+    "win.install_ai_copy": ("Copy the commands for one option into Terminal, one line at a time. "
+                            "Then close this window and click Check again.",
+                            "Kopieren Sie die Befehle einer Variante einzeln in Terminal. Schließen Sie "
+                            "danach dieses Fenster und klicken Sie erneut auf Prüfen.",
+                            "Скопируйте команды одного варианта в Терминал по одной строке. "
+                            "Затем закройте это окно и снова нажмите «Проверить»."),
     "win.ai_rules": ("The text goes to the chosen AI under your account (a local model keeps it on the "
                      "computer), so only if the rules you work under allow it.",
                      "Der Text geht an die gewählte KI unter Ihrem Konto (ein lokales Modell behält ihn auf "

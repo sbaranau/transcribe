@@ -17,5 +17,8 @@ export HF_HOME="$DATA/huggingface"
 export HF_HUB_DISABLE_SYMLINKS_WARNING=1
 export PYTHONIOENCODING=utf-8
 export PYTHONUTF8=1
+# Finder applications do not read ~/.zprofile. Include the two locations used by the
+# installation instructions so Claude Code and Codex are visible to the application.
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 exec "$PY" "$RESOURCES/app/bootstrap.py" --live --cpu >>"$LOG" 2>&1
