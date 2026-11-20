@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- The AI setup's choice page shows the state of each AI: "Connected" (with the account) for one
+  that is ready, "Sign in" for one that is installed without a sign-in, so a connected AI no
+  longer looks as if it had to be installed. The unclear "another account" link is now "Back to
+  the choice of AI".
+
 ## v1.30 — 2026-11-20
 
 - With one AI ready, "Connect another AI…" next to the summary option opens the wizard straight

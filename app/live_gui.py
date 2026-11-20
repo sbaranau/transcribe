@@ -1946,6 +1946,9 @@ class App:
                     self.stopping_overlay.place_forget()
                     self.status.configure(text=t("win.error"), foreground=RED)
                     messagebox.showerror(t("win.error"), t("win.stop_failed", error=data))
+                elif kind == "ai_setup_card":
+                    if self.ai_setup is not None:
+                        self.ai_setup.show_card(*data)
                 elif kind == "ai_setup":
                     if self.ai_setup is not None:
                         self.ai_setup.checked(*data)
@@ -2060,6 +2063,7 @@ class AiSetupDialog:
 
     def show_choice(self) -> None:
         self.engine = None
+        self.card_actions = {}
         page = self.new_page()
         ttk.Label(page, text=t("setup.title"), font=(FONT, 16, "bold")).pack(anchor="w")
         ttk.Label(page, text=t("setup.intro"), font=(FONT, 11), wraplength=620, justify="left").pack(
@@ -2074,8 +2078,13 @@ class AiSetupDialog:
             tk.Label(card, text=t(f"setup.{engine}_account"), font=(FONT, 14, "bold"), background="white").pack()
             tk.Label(card, text=t(f"setup.{engine}_need"), font=(FONT, 10), foreground=GREY, background="white",
                      wraplength=260, justify="center", height=4, anchor="n").pack(pady=(4, 10))
-            primary_label(card, t("setup.choose", name=self.name(engine)), ("#1f6fc5", "#195ba3"),
-                          lambda e=engine: self.show_engine(e), size=11).pack(fill="x")
+            # What the card offers depends on the AI's state on this computer, checked below:
+            # connect it, only sign in, or nothing to do (connected).
+            holder = tk.Frame(card, background="white")
+            holder.pack(fill="x")
+            self.card_actions[engine] = holder
+            self.show_card(engine, "checking", "")
+            threading.Thread(target=self.check_card, args=(engine,), daemon=True).start()
         line = ttk.Frame(page)
         line.pack(anchor="w", pady=(16, 0))
         ttk.Label(line, text=t("setup.no_account"), style="Note.TLabel").pack(side="left")
@@ -2086,6 +2095,34 @@ class AiSetupDialog:
             link.pack(side="left", padx=(6, 0))
         ttk.Button(page, text=t("win.close"), command=self.close).pack(side="bottom", anchor="e")
 
+    def check_card(self, engine: str) -> None:
+        try:
+            state, account = ai_install.status(engine)
+        except Exception as error:
+            print(f"AI setup check failed: {error}", flush=True)
+            return
+        self.app.events.put(("ai_setup_card", (engine, state, account)))
+
+    def show_card(self, engine: str, state: str, account: str) -> None:
+        holder = self.card_actions.get(engine)
+        if self.engine is not None or holder is None or not holder.winfo_exists():
+            return  # the other page is shown meanwhile
+        for child in holder.winfo_children():
+            child.destroy()
+        if state == "checking":
+            tk.Label(holder, text=t("setup.state_checking"), font=(FONT, 10), foreground=GREY,
+                     background="white", pady=8).pack(fill="x")
+            return
+        if state == "ready":
+            tk.Label(holder, text="✓  " + t("setup.card_ready"), font=(FONT, 11, "bold"), foreground=GREEN,
+                     background="#e6f4ea", pady=8).pack(fill="x")
+            if "@" in account:
+                tk.Label(holder, text=account, font=(FONT, 9), foreground=GREY, background="white").pack(pady=(3, 0))
+            return
+        label = t("setup.choose", name=self.name(engine)) if state == "missing" else t("setup.card_login")
+        primary_label(holder, label, ("#1f6fc5", "#195ba3"), lambda e=engine: self.show_engine(e),
+                      size=11).pack(fill="x")
+
     # --- page 2: install and sign in ------------------------------------------------------------
 
     def show_engine(self, engine: str) -> None:
@@ -2094,7 +2131,7 @@ class AiSetupDialog:
         self.state = "checking"
         name = self.name(engine)
         page = self.new_page()
-        back = tk.Label(page, text="← " + t("setup.other_account"), font=(FONT, 10, "underline"),
+        back = tk.Label(page, text="← " + t("setup.back_to_choice"), font=(FONT, 10, "underline"),
                         foreground="#1565c0", cursor="hand2")
         back.bind("<Button-1>", lambda _event: self.show_choice())
         back.pack(anchor="w")

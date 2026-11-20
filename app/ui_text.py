@@ -389,7 +389,9 @@ TEXTS = {
     "setup.choose": ("Connect {name}", "{name} verbinden", "Подключить {name}"),
     "setup.no_account": ("No account yet? Create one first:", "Noch kein Konto? Erst eines anlegen:",
                          "Нет аккаунта? Сначала заведите его:"),
-    "setup.other_account": ("another account", "anderes Konto", "другой аккаунт"),
+    "setup.back_to_choice": ("Back to the choice of AI", "Zurück zur Auswahl der KI", "Назад к выбору ИИ"),
+    "setup.card_ready": ("Connected", "Verbunden", "Подключён"),
+    "setup.card_login": ("Sign in", "Anmelden", "Войти в аккаунт"),
     "setup.connect": ("Connect {name}", "{name} verbinden", "Подключение {name}"),
     "setup.step_button": ("Press the blue button below. A {shell} window with text opens: you do not have to type "
                           "anything in it.",
