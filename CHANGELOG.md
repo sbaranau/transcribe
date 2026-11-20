@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.34 — 2026-11-20
 
 - Icons: the app's icon in the app bar, and small icons from the system's icon font before the
   section headings (meeting setup, transcription of a recording, results, transcript,
