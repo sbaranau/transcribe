@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Without any AI, the yellow panel has a "How to install an AI…" button on Windows and macOS: the
+  official steps for Claude Code or the Codex CLI with a Copy button per command, and a button
+  that runs them in a visible PowerShell or Terminal window, where the sign-in happens. Closing
+  it looks for the AIs again.
+- macOS: Codex and Claude Code in ~/.local/bin are found even when the app is opened from Finder.
+- Check with an empty path looks for the AIs again in the background instead of freezing the
+  window.
+
 ## v1.28 — 2026-11-18
 
 - Processing shows its steps (transcription, speakers, translation, AI check, summary) with

@@ -348,16 +348,74 @@ TEXTS = {
                  "Путь к claude, codex, gemini, copilot или qwen (или к их папке), или адрес локального сервера, "
                  "например http://127.0.0.1:11434:"),
     "win.try_path": ("Check", "Prüfen", "Проверить"),
-    "win.install_ai": ("How to install an AI on macOS", "KI unter macOS installieren",
-                       "Как установить ИИ на macOS"),
-    "win.install_ai_title": ("Install Codex CLI or Claude Code", "Codex CLI oder Claude Code installieren",
-                             "Установка Codex CLI или Claude Code"),
-    "win.install_ai_copy": ("Copy the commands for one option into Terminal, one line at a time. "
-                            "Then close this window and click Check again.",
-                            "Kopieren Sie die Befehle einer Variante einzeln in Terminal. Schließen Sie "
-                            "danach dieses Fenster und klicken Sie erneut auf Prüfen.",
-                            "Скопируйте команды одного варианта в Терминал по одной строке. "
-                            "Затем закройте это окно и снова нажмите «Проверить»."),
+    "win.install_ai": ("How to install an AI…", "KI installieren…", "Как установить ИИ…"),
+    "win.install_ai_title": ("Install Claude Code or the Codex CLI", "Claude Code oder Codex CLI installieren",
+                             "Установка Claude Code или Codex CLI"),
+    "win.install_ai_copy_mac": ("One of the two is enough. Both install for your user only, without an "
+                                "administrator password, and you sign in with your own account (Claude or ChatGPT). "
+                                "Press the blue button to run the steps in a Terminal window, or copy the commands "
+                                "one by one.",
+                                "Eine der beiden genügt. Beide werden nur für Ihren Benutzer installiert, ohne "
+                                "Administratorpasswort, und Sie melden sich mit Ihrem eigenen Konto an (Claude oder "
+                                "ChatGPT). Mit der blauen Schaltfläche laufen die Schritte in einem Terminal-Fenster; "
+                                "oder kopieren Sie die Befehle einzeln.",
+                                "Достаточно одного из двух. Оба ставятся только для вашего пользователя, без пароля "
+                                "администратора, а вход выполняется вашей учётной записью (Claude или ChatGPT). Синяя "
+                                "кнопка выполнит шаги в окне Терминала; можно и скопировать команды по одной."),
+    "win.install_ai_copy_win": ("One of the two is enough; you sign in with your own account (Claude or ChatGPT). "
+                                "Claude Code and the Codex CLI install for your user only; Git and Node.js, if they "
+                                "are not there yet, install for the whole computer, and Windows asks you to allow "
+                                "that. Press the blue button to run the steps in a PowerShell window, or copy the "
+                                "commands one by one.",
+                                "Eine der beiden genügt; Sie melden sich mit Ihrem eigenen Konto an (Claude oder "
+                                "ChatGPT). Claude Code und die Codex CLI werden nur für Ihren Benutzer installiert; "
+                                "Git und Node.js, falls noch nicht vorhanden, für den ganzen Computer, und Windows "
+                                "fragt nach Ihrer Zustimmung. Mit der blauen Schaltfläche laufen die Schritte in einem "
+                                "PowerShell-Fenster; oder kopieren Sie die Befehle einzeln.",
+                                "Достаточно одного из двух; вход выполняется вашей учётной записью (Claude или "
+                                "ChatGPT). Claude Code и Codex CLI ставятся только для вашего пользователя; Git и "
+                                "Node.js, если их ещё нет, ставятся для всего компьютера, и Windows попросит "
+                                "разрешения. Синяя кнопка выполнит шаги в окне PowerShell; можно и скопировать "
+                                "команды по одной."),
+    "win.install_run": ("▶  Run these steps in {shell}", "▶  Diese Schritte in {shell} ausführen",
+                        "▶  Выполнить эти шаги в {shell}"),
+    "win.install_ai_after": ("When the sign-in is finished, close this window: the AI is then looked for again. "
+                             "If it is still not found, enter its path below the panel and press Check.",
+                             "Wenn die Anmeldung abgeschlossen ist, schließen Sie dieses Fenster: Dann wird "
+                             "erneut nach der KI gesucht. Wird sie nicht gefunden, geben Sie ihren Pfad unten "
+                             "ein und klicken Sie auf Prüfen.",
+                             "Когда вход завершён, закройте это окно: ИИ будет найден заново. Если он всё равно "
+                             "не находится, укажите путь к нему ниже и нажмите «Проверить»."),
+    "win.install_ai_done": ("Done, search again", "Fertig, erneut suchen", "Готово, искать снова"),
+    "win.copy_short": ("Copy", "Kopieren", "Копировать"),
+    "install.claude_title": ("Claude Code (Claude account)", "Claude Code (Claude-Konto)",
+                             "Claude Code (учётная запись Claude)"),
+    "install.codex_title": ("Codex CLI (ChatGPT account)", "Codex CLI (ChatGPT-Konto)",
+                            "Codex CLI (учётная запись ChatGPT)"),
+    "install.git_win": ("Git for Windows, recommended for Claude Code (skipped if already installed):",
+                        "Git für Windows, empfohlen für Claude Code (wird übersprungen, wenn vorhanden):",
+                        "Git для Windows, рекомендован для Claude Code (пропускается, если уже есть):"),
+    "install.claude_win": ("Claude Code, with Anthropic's installer:", "Claude Code mit dem Installer von Anthropic:",
+                           "Claude Code официальным установщиком Anthropic:"),
+    "install.claude_mac": ("Claude Code, with Anthropic's installer (into ~/.local/bin):",
+                           "Claude Code mit dem Installer von Anthropic (nach ~/.local/bin):",
+                           "Claude Code официальным установщиком Anthropic (в ~/.local/bin):"),
+    "install.claude_login": ("Start Claude Code and sign in in the browser; then type /exit:",
+                             "Claude Code starten und im Browser anmelden; danach /exit eingeben:",
+                             "Запустите Claude Code и войдите в браузере; затем введите /exit:"),
+    "install.node_win": ("Node.js, which the Codex CLI runs on (skipped if already installed):",
+                         "Node.js, auf dem die Codex CLI läuft (wird übersprungen, wenn vorhanden):",
+                         "Node.js, на котором работает Codex CLI (пропускается, если уже есть):"),
+    "install.codex_win": ("The Codex CLI, with npm:", "Die Codex CLI mit npm:", "Codex CLI через npm:"),
+    "install.codex_mac": ("The Codex CLI, with OpenAI's installer (into ~/.local/bin):",
+                          "Die Codex CLI mit dem Installer von OpenAI (nach ~/.local/bin):",
+                          "Codex CLI официальным установщиком OpenAI (в ~/.local/bin):"),
+    "install.path_mac": ("~/.local/bin on the PATH of new Terminal windows:",
+                         "~/.local/bin im PATH neuer Terminal-Fenster:",
+                         "~/.local/bin в PATH новых окон Терминала:"),
+    "install.codex_login": ("Sign in with your ChatGPT account in the browser:",
+                            "Im Browser mit dem ChatGPT-Konto anmelden:",
+                            "Войдите учётной записью ChatGPT в браузере:"),
     "win.ai_rules": ("The text goes to the chosen AI under your account (a local model keeps it on the "
                      "computer), so only if the rules you work under allow it.",
                      "Der Text geht an die gewählte KI unter Ihrem Konto (ein lokales Modell behält ihn auf "

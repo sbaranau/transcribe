@@ -33,6 +33,7 @@ import webbrowser
 from tkinter import filedialog, font as tkfont, messagebox, ttk
 
 import ai_engines
+import ai_install
 import live
 import paths
 import screenshots
@@ -1220,9 +1221,6 @@ class App:
         self.path_entry.pack(side="left")
         self.try_button = ttk.Button(entry_line, text=t("win.try_path"), command=self.try_path)
         self.try_button.pack(side="left", padx=6)
-        if sys.platform == "darwin":
-            ttk.Button(entry_line, text=t("win.install_ai"), command=self.show_ai_install).pack(
-                side="left", padx=(2, 0))
         self.ai_warning = ttk.Label(frame, foreground=RED, wraplength=760, text=t("win.ai_rules"))
         self.ai_warning.grid(row=12, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=(2, 4))
         # Without any usable AI its options are hidden; this says what to install instead.
@@ -1232,9 +1230,13 @@ class App:
                  font=(FONT, 10), justify="left", anchor="w", wraplength=740).pack(anchor="w", fill="x")
         self.no_ai_reasons = tk.Label(self.no_ai_panel, background="#fff3c4", foreground="#5d4300",
                                       font=(FONT, 9), justify="left", anchor="w", wraplength=740)
-        self.search_again_button = ttk.Button(self.no_ai_panel, text=t("win.search_again"),
-                                              command=self.search_ai)
-        self.search_again_button.pack(anchor="w", pady=(6, 0), side="bottom")
+        buttons = tk.Frame(self.no_ai_panel, background="#fff3c4")
+        buttons.pack(anchor="w", pady=(6, 0), side="bottom")
+        self.search_again_button = ttk.Button(buttons, text=t("win.search_again"), command=self.search_ai)
+        self.search_again_button.pack(side="left")
+        if ai_install.GUIDES:  # Windows and macOS: the steps, with a button that runs them
+            ttk.Button(buttons, text=t("win.install_ai"), command=self.show_ai_install).pack(
+                side="left", padx=(6, 0))
 
         self.delete_box = ttk.Checkbutton(frame, text=t("win.delete_sound"), variable=self.delete_sound)
         if not file_mode:  # someone else's recording is never deleted from here
@@ -1367,10 +1369,7 @@ class App:
 
     def try_path(self) -> None:
         if not self.path_entry.get().strip():
-            usable, left_out = ai_engines.verify_engines(ai_engines.find_engines())
-            self.show_ai(usable, left_out)
-            if not usable:
-                messagebox.showwarning(t("win.not_found_title"), t("ai.path_wrong").strip())
+            self.search_ai()  # nothing entered: look again for installed tools, in the background
             return
         result = ai_engines.classify(self.path_entry.get())
         if not result:
@@ -1385,53 +1384,52 @@ class App:
         self.show_ai(usable, {})
 
     def show_ai_install(self) -> None:
-        """Show copyable, beginner-friendly installation steps for the packaged macOS app."""
+        """The official steps to install Claude Code or the Codex CLI (ai_install.py): each
+        command with a Copy button, and a button that runs all of them in a visible PowerShell or
+        Terminal window. Closing it looks for the AIs again."""
         dialog = tk.Toplevel(self.root)
         dialog.title(t("win.install_ai_title"))
-        dialog.geometry("760x610")
-        dialog.minsize(620, 460)
+        dialog.minsize(640, 460)
         dialog.transient(self.root)
-        ttk.Label(dialog, text=t("win.install_ai_title"), font=(FONT, 16, "bold")).pack(
-            anchor="w", padx=22, pady=(20, 6))
-        ttk.Label(dialog, text=t("win.install_ai_copy"), wraplength=710, justify="left").pack(
-            anchor="w", padx=22, pady=(0, 10))
-        instructions = """CODEX CLI (ChatGPT)
+        mono = ("Consolas", 10) if os.name == "nt" else ("Menlo", 11)
+        ttk.Label(dialog, text=t("win.install_ai_title"), font=(FONT, 15, "bold")).pack(
+            anchor="w", padx=20, pady=(18, 4))
+        ttk.Label(dialog, text=t("win.install_ai_copy_win" if os.name == "nt" else "win.install_ai_copy_mac"), wraplength=700,
+                  justify="left").pack(anchor="w", padx=20, pady=(0, 8))
+        for title, steps in ai_install.GUIDES:
+            box = ttk.LabelFrame(dialog, text=" " + t(title) + " ", padding=10)
+            box.pack(fill="x", padx=20, pady=(6, 4))
+            box.columnconfigure(0, weight=1)
+            row = 0
+            for number, (text, command) in enumerate(steps, start=1):
+                ttk.Label(box, text=f"{number}. {t(text)}", wraplength=640, justify="left").grid(
+                    row=row, column=0, columnspan=2, sticky="w", pady=(4 if row else 0, 1))
+                field = ttk.Entry(box, font=mono)
+                field.insert(0, command)
+                field.configure(state="readonly")
+                field.grid(row=row + 1, column=0, sticky="ew")
+                ttk.Button(box, text=t("win.copy_short"), width=10,
+                           command=lambda c=command: self.copy_command(c)).grid(
+                    row=row + 1, column=1, sticky="e", padx=(6, 0))
+                row += 2
+            primary_label(box, t("win.install_run", shell=ai_install.SHELL), ("#1f6fc5", "#195ba3"),
+                          lambda s=steps: ai_install.run_in_shell([c for _, c in s]), size=11).grid(
+                row=row, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        ttk.Label(dialog, text=t("win.install_ai_after"), style="Note.TLabel", wraplength=700,
+                  justify="left").pack(anchor="w", padx=20, pady=(8, 4))
 
-1. Install Codex for the current user (no administrator password or Homebrew needed):
-curl -fsSL https://chatgpt.com/codex/install.sh | sh
+        def close() -> None:
+            dialog.destroy()
+            self.search_ai()  # an AI installed meanwhile is offered right away
 
-2. Add the user programs folder to PATH:
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zprofile
-export PATH="$HOME/.local/bin:$PATH"
-
-3. Log in and check:
-codex login
-codex login status
-
-
-CLAUDE CODE
-
-1. Install Claude Code:
-curl -fsSL https://claude.ai/install.sh | bash
-
-2. Add it to PATH:
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zprofile
-export PATH="$HOME/.local/bin:$PATH"
-
-3. Start Claude, select your account type and complete login in the browser:
-claude
-
-After installation, paste this into the Path field if automatic detection still fails:
-Codex: ~/.local/bin/codex
-Claude: ~/.local/bin/claude
-"""
-        text = tk.Text(dialog, wrap="word", font=("Menlo", 11), padx=12, pady=12)
-        text.insert("1.0", instructions)
-        text.configure(state="disabled")
-        text.pack(fill="both", expand=True, padx=22, pady=(0, 12))
-        ttk.Button(dialog, text=t("win.close"), command=dialog.destroy).pack(pady=(0, 18))
-        dialog.bind("<Escape>", lambda _event: dialog.destroy())
+        ttk.Button(dialog, text=t("win.install_ai_done"), command=close).pack(pady=(4, 16))
+        dialog.protocol("WM_DELETE_WINDOW", close)
+        dialog.bind("<Escape>", lambda _event: close())
         dialog.grab_set()
+
+    def copy_command(self, command: str) -> None:
+        self.root.clipboard_clear()
+        self.root.clipboard_append(command)
 
     def run_processing(self) -> None:
         if not (self.redo.get() or self.summary.get() or self.translate.get()):
