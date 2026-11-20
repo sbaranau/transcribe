@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.32 — 2026-11-20
 
 - Windows: the installer could not close a running Live Transcription, because its launcher has
   no window, and Windows then closes nothing at all. The installer now closes it by force where
