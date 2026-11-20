@@ -175,16 +175,31 @@ TEXTS = {
                         "Live Transcription {version} ist verfügbar. Downloadseite öffnen?",
                         "Доступна Live Transcription {version}. Открыть страницу загрузки?"),
     "win.update_text_macos": (
-        "Live Transcription {version} is available. Open the download page?\n\n"
-        "Important: this independent build is not notarized by Apple. After replacing the app, "
-        "macOS will require you to approve the new version again in System Settings → Privacy & Security.",
-        "Live Transcription {version} ist verfügbar. Downloadseite öffnen?\n\n"
-        "Wichtig: Diese unabhängige Version ist nicht von Apple notarisiert. Nach dem Ersetzen der App "
-        "müssen Sie die neue Version in Systemeinstellungen → Datenschutz & Sicherheit erneut erlauben.",
-        "Доступна Live Transcription {version}. Открыть страницу загрузки?\n\n"
-        "Важно: эта независимая сборка не нотарифицирована Apple. После замены приложения macOS "
-        "потребует снова разрешить новую версию в разделе «Системные настройки → "
-        "Конфиденциальность и безопасность»."),
+        "Live Transcription {version} is available. Download it now?\n\n"
+        "The download starts in the browser and Live Transcription closes, so that the new version can "
+        "replace it. Then open the downloaded file, drag Live Transcription to Applications and choose "
+        "Replace.\n\n"
+        "This independent build is not notarized by Apple: macOS asks you once more to allow the new "
+        "version in System Settings → Privacy & Security.",
+        "Live Transcription {version} ist verfügbar. Jetzt herunterladen?\n\n"
+        "Der Download startet im Browser, und Live Transcription wird beendet, damit die neue Version "
+        "sie ersetzen kann. Öffnen Sie dann die geladene Datei, ziehen Sie Live Transcription in "
+        "Programme und wählen Sie Ersetzen.\n\n"
+        "Diese unabhängige Version ist nicht von Apple notarisiert: macOS fragt noch einmal nach der "
+        "Erlaubnis in Systemeinstellungen → Datenschutz & Sicherheit.",
+        "Доступна Live Transcription {version}. Скачать сейчас?\n\n"
+        "Загрузка начнётся в браузере, а Live Transcription закроется, чтобы новая версия могла её "
+        "заменить. Затем откройте скачанный файл, перетащите Live Transcription в «Программы» и "
+        "выберите «Заменить».\n\n"
+        "Эта независимая сборка не нотарифицирована Apple: macOS ещё раз попросит разрешить новую "
+        "версию в разделе «Системные настройки → Конфиденциальность и безопасность»."),
+    "win.update_quit_later": (
+        "The processing still runs. When it is done, close Live Transcription before you replace it "
+        "in Applications.",
+        "Die Verarbeitung läuft noch. Beenden Sie Live Transcription, wenn sie fertig ist, bevor Sie "
+        "die App in Programme ersetzen.",
+        "Обработка ещё идёт. Когда она закончится, закройте Live Transcription и только потом "
+        "заменяйте её в «Программах»."),
     "win.update": ("Check for updates", "Aktualisieren", "Обновить"),
     "win.update_checking": ("Checking...", "Prüfe...", "Проверяю…"),
     "win.update_current": ("You have the latest version ({version}).",
@@ -349,6 +364,7 @@ TEXTS = {
                  "например http://127.0.0.1:11434:"),
     "win.try_path": ("Check", "Prüfen", "Проверить"),
     "win.install_ai": ("Connect an AI…", "KI verbinden…", "Подключить ИИ…"),
+    "win.install_other": ("Connect another AI…", "Weitere KI verbinden…", "Подключить другой ИИ…"),
     "win.copy_short": ("Copy", "Kopieren", "Копировать"),
     "setup.title": ("Connect an AI", "KI verbinden", "Подключение ИИ"),
     "setup.intro": ("An AI is only needed for checking the text and writing the summary. The program connects to "

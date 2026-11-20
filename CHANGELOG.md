@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- With one AI ready, "Connect another AI…" next to the summary option opens the wizard straight
+  on the other one (Claude or ChatGPT, whichever is not ready yet).
+- macOS: an update could not be installed while the old version was open. Accepting the update
+  offer now downloads the new DMG directly and quits the app (after a running processing, it
+  asks to close the app once that is done). Cmd+Q goes through the same checks as closing the
+  window, and the DMG's guide says to quit the old version before replacing it.
+
 ## v1.29 — 2026-11-20
 
 - Without any AI, the yellow panel has a "Connect an AI…" button on Windows and macOS. It asks

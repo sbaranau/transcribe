@@ -32,6 +32,12 @@ def latest_release() -> str | None:
         return None
 
 
+def macos_download_url(version: str) -> str:
+    """The DMG of a release (the asset name macos-release.yml gives it)."""
+    tag = "v" + version.strip().lstrip("v")
+    return f"https://github.com/sbaranau/transcribe/releases/download/{tag}/Live-Transcription-macOS-Apple-Silicon-{tag}.dmg"
+
+
 def is_newer(version: str) -> bool:
     return _parts(version) > _parts(current_version())
 

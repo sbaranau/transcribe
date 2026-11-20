@@ -104,6 +104,8 @@ class App:
         root.geometry(f"900x{min(820, max(600, root.winfo_screenheight() - 90))}")
         root.minsize(720, 520)
         root.protocol("WM_DELETE_WINDOW", self.on_close)
+        if sys.platform == "darwin":
+            root.createcommand("::tk::mac::Quit", self.on_close)  # Cmd+Q and Quit in the Dock
         style = ttk.Style()
         style.configure("Big.TButton", font=(FONT, 11, "bold"), padding=(14, 6))
         style.configure("TLabel", font=(FONT, 10))
@@ -163,14 +165,27 @@ class App:
         if manual:
             self.update_button.configure(state="normal", text=t("win.update"))
         if version and updates.is_newer(version):
-            update_key = "win.update_text_macos" if sys.platform == "darwin" else "win.update_text"
-            if messagebox.askyesno(t("win.update_title"), t(update_key, version=version)):
+            if sys.platform == "darwin":
+                self.update_macos(version)
+            elif messagebox.askyesno(t("win.update_title"), t("win.update_text", version=version)):
                 webbrowser.open(updates.RELEASES_URL)
         elif manual and version:
             messagebox.showinfo(t("win.update_title"), t(
                 "win.update_current", version=updates.current_version()))
         elif manual:
             messagebox.showerror(t("win.update_title"), t("win.update_failed"))
+
+    def update_macos(self, version: str) -> None:
+        """macOS cannot replace an app that is open, so the new DMG is downloaded and this app
+        quits; nothing is lost, since a recording defers this offer until it is stopped. A
+        processing that still runs is finished first."""
+        if not messagebox.askyesno(t("win.update_title"), t("win.update_text_macos", version=version)):
+            return
+        webbrowser.open(updates.macos_download_url(version))
+        if self.processing and self.processing.poll() is None:
+            messagebox.showinfo(t("win.update_title"), t("win.update_quit_later"))
+            return
+        self.on_close()
 
     # --- layout -----------------------------------------------------------------------------------
 
@@ -1206,6 +1221,12 @@ class App:
         self.summary_box = ttk.Checkbutton(frame, text=t("win.summary"), variable=self.summary,
                                            command=self.refresh_after)
         self.summary_box.grid(row=8, column=0, columnspan=3, sticky="w", pady=(8, 2))
+        # With one AI ready, the other one can still be connected (the wizard opens on it).
+        self.other_ai_link = tk.Label(frame, text=t("win.install_other"), font=(FONT, 9, "underline"),
+                                      foreground="#1565c0", cursor="hand2", takefocus=True)
+        for sequence in ("<Button-1>", "<Return>", "<space>"):
+            self.other_ai_link.bind(sequence, lambda _event: self.show_ai_install())
+        self.other_ai_link.grid(row=8, column=2, sticky="e", pady=(8, 2))
 
         self.ai_row = ttk.Frame(frame)
         self.ai_row.grid(row=9, column=0, columnspan=3, sticky="w", padx=(22, 0), pady=(4, 2))
@@ -1322,6 +1343,11 @@ class App:
         self.summary_box.configure(state="normal" if ai_ready else "disabled")
         for box in (self.check_box, self.check_translation_box, self.summary_box):
             box.grid_remove() if self.ai_state == "none" else box.grid()
+        missing = [engine for engine in ai_install.GUIDES if engine not in self.found_ai]
+        if self.ai_state == "ready" and missing:
+            self.other_ai_link.grid()
+        else:
+            self.other_ai_link.grid_remove()
         if self.ai_state == "none":
             self.no_ai_panel.grid(row=9, column=0, columnspan=3, sticky="ew", pady=(8, 2))
         else:
@@ -1388,7 +1414,9 @@ class App:
         if self.ai_setup is not None and self.ai_setup.window.winfo_exists():
             self.ai_setup.window.lift()
             return
-        self.ai_setup = AiSetupDialog(self)
+        # Straight to the AI that is not ready yet, when only one of the two is; else the choice.
+        missing = [engine for engine in ai_install.GUIDES if engine not in self.found_ai]
+        self.ai_setup = AiSetupDialog(self, missing[0] if len(missing) == 1 else None)
 
     def copy_command(self, command: str) -> None:
         self.root.clipboard_clear()
@@ -2000,7 +2028,8 @@ class AiSetupDialog:
     COLOURS = {"checking": ("#f0f0f0", GREY), "missing": ("#f0f0f0", "#444444"),
                "login": ("#fff3c4", "#5d4300"), "ready": ("#e6f4ea", GREEN), "started": ("#e8f0fb", "#174a85")}
 
-    def __init__(self, app: "App"):
+    def __init__(self, app: "App", engine: str | None = None):
+        """engine: open straight on it (the one AI not ready yet), instead of the choice."""
         self.app = app
         self.engine = None
         self.state = "checking"
@@ -2013,7 +2042,7 @@ class AiSetupDialog:
         self.window.protocol("WM_DELETE_WINDOW", self.close)
         self.window.bind("<Escape>", lambda _event: self.close())
         self.page = None
-        self.show_choice()
+        self.show_engine(engine) if engine else self.show_choice()
         self.window.after(3000, self.watch)
 
     def new_page(self) -> ttk.Frame:
