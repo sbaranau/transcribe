@@ -348,74 +348,110 @@ TEXTS = {
                  "Путь к claude, codex, gemini, copilot или qwen (или к их папке), или адрес локального сервера, "
                  "например http://127.0.0.1:11434:"),
     "win.try_path": ("Check", "Prüfen", "Проверить"),
-    "win.install_ai": ("How to install an AI…", "KI installieren…", "Как установить ИИ…"),
-    "win.install_ai_title": ("Install Claude Code or the Codex CLI", "Claude Code oder Codex CLI installieren",
-                             "Установка Claude Code или Codex CLI"),
-    "win.install_ai_copy_mac": ("One of the two is enough. Both install for your user only, without an "
-                                "administrator password, and you sign in with your own account (Claude or ChatGPT). "
-                                "Press the blue button to run the steps in a Terminal window, or copy the commands "
-                                "one by one.",
-                                "Eine der beiden genügt. Beide werden nur für Ihren Benutzer installiert, ohne "
-                                "Administratorpasswort, und Sie melden sich mit Ihrem eigenen Konto an (Claude oder "
-                                "ChatGPT). Mit der blauen Schaltfläche laufen die Schritte in einem Terminal-Fenster; "
-                                "oder kopieren Sie die Befehle einzeln.",
-                                "Достаточно одного из двух. Оба ставятся только для вашего пользователя, без пароля "
-                                "администратора, а вход выполняется вашей учётной записью (Claude или ChatGPT). Синяя "
-                                "кнопка выполнит шаги в окне Терминала; можно и скопировать команды по одной."),
-    "win.install_ai_copy_win": ("One of the two is enough; you sign in with your own account (Claude or ChatGPT). "
-                                "Claude Code and the Codex CLI install for your user only; Git and Node.js, if they "
-                                "are not there yet, install for the whole computer, and Windows asks you to allow "
-                                "that. Press the blue button to run the steps in a PowerShell window, or copy the "
-                                "commands one by one.",
-                                "Eine der beiden genügt; Sie melden sich mit Ihrem eigenen Konto an (Claude oder "
-                                "ChatGPT). Claude Code und die Codex CLI werden nur für Ihren Benutzer installiert; "
-                                "Git und Node.js, falls noch nicht vorhanden, für den ganzen Computer, und Windows "
-                                "fragt nach Ihrer Zustimmung. Mit der blauen Schaltfläche laufen die Schritte in einem "
-                                "PowerShell-Fenster; oder kopieren Sie die Befehle einzeln.",
-                                "Достаточно одного из двух; вход выполняется вашей учётной записью (Claude или "
-                                "ChatGPT). Claude Code и Codex CLI ставятся только для вашего пользователя; Git и "
-                                "Node.js, если их ещё нет, ставятся для всего компьютера, и Windows попросит "
-                                "разрешения. Синяя кнопка выполнит шаги в окне PowerShell; можно и скопировать "
-                                "команды по одной."),
-    "win.install_run": ("▶  Run these steps in {shell}", "▶  Diese Schritte in {shell} ausführen",
-                        "▶  Выполнить эти шаги в {shell}"),
-    "win.install_ai_after": ("When the sign-in is finished, close this window: the AI is then looked for again. "
-                             "If it is still not found, enter its path below the panel and press Check.",
-                             "Wenn die Anmeldung abgeschlossen ist, schließen Sie dieses Fenster: Dann wird "
-                             "erneut nach der KI gesucht. Wird sie nicht gefunden, geben Sie ihren Pfad unten "
-                             "ein und klicken Sie auf Prüfen.",
-                             "Когда вход завершён, закройте это окно: ИИ будет найден заново. Если он всё равно "
-                             "не находится, укажите путь к нему ниже и нажмите «Проверить»."),
-    "win.install_ai_done": ("Done, search again", "Fertig, erneut suchen", "Готово, искать снова"),
+    "win.install_ai": ("Connect an AI…", "KI verbinden…", "Подключить ИИ…"),
     "win.copy_short": ("Copy", "Kopieren", "Копировать"),
-    "install.claude_title": ("Claude Code (Claude account)", "Claude Code (Claude-Konto)",
-                             "Claude Code (учётная запись Claude)"),
-    "install.codex_title": ("Codex CLI (ChatGPT account)", "Codex CLI (ChatGPT-Konto)",
-                            "Codex CLI (учётная запись ChatGPT)"),
-    "install.git_win": ("Git for Windows, recommended for Claude Code (skipped if already installed):",
-                        "Git für Windows, empfohlen für Claude Code (wird übersprungen, wenn vorhanden):",
-                        "Git для Windows, рекомендован для Claude Code (пропускается, если уже есть):"),
-    "install.claude_win": ("Claude Code, with Anthropic's installer:", "Claude Code mit dem Installer von Anthropic:",
-                           "Claude Code официальным установщиком Anthropic:"),
-    "install.claude_mac": ("Claude Code, with Anthropic's installer (into ~/.local/bin):",
-                           "Claude Code mit dem Installer von Anthropic (nach ~/.local/bin):",
-                           "Claude Code официальным установщиком Anthropic (в ~/.local/bin):"),
-    "install.claude_login": ("Start Claude Code and sign in in the browser; then type /exit:",
-                             "Claude Code starten und im Browser anmelden; danach /exit eingeben:",
-                             "Запустите Claude Code и войдите в браузере; затем введите /exit:"),
-    "install.node_win": ("Node.js, which the Codex CLI runs on (skipped if already installed):",
-                         "Node.js, auf dem die Codex CLI läuft (wird übersprungen, wenn vorhanden):",
-                         "Node.js, на котором работает Codex CLI (пропускается, если уже есть):"),
-    "install.codex_win": ("The Codex CLI, with npm:", "Die Codex CLI mit npm:", "Codex CLI через npm:"),
-    "install.codex_mac": ("The Codex CLI, with OpenAI's installer (into ~/.local/bin):",
-                          "Die Codex CLI mit dem Installer von OpenAI (nach ~/.local/bin):",
-                          "Codex CLI официальным установщиком OpenAI (в ~/.local/bin):"),
-    "install.path_mac": ("~/.local/bin on the PATH of new Terminal windows:",
-                         "~/.local/bin im PATH neuer Terminal-Fenster:",
-                         "~/.local/bin в PATH новых окон Терминала:"),
-    "install.codex_login": ("Sign in with your ChatGPT account in the browser:",
-                            "Im Browser mit dem ChatGPT-Konto anmelden:",
-                            "Войдите учётной записью ChatGPT в браузере:"),
+    "setup.title": ("Connect an AI", "KI verbinden", "Подключение ИИ"),
+    "setup.intro": ("An AI is only needed for checking the text and writing the summary. The program connects to "
+                    "your own account, just as you sign in on a website; it costs nothing extra. Which account do "
+                    "you have?",
+                    "Eine KI wird nur für die Textprüfung und die Zusammenfassung gebraucht. Das Programm verbindet "
+                    "sich mit Ihrem eigenen Konto, so wie Sie sich auf einer Website anmelden; das kostet nichts "
+                    "extra. Welches Konto haben Sie?",
+                    "ИИ нужен только для проверки текста и выжимки. Программа подключается к вашему собственному "
+                    "аккаунту — так же, как вы входите на сайт; ничего дополнительно платить не нужно. Какой "
+                    "аккаунт у вас есть?"),
+    "setup.claude_account": ("Claude", "Claude", "Claude"),
+    "setup.codex_account": ("ChatGPT", "ChatGPT", "ChatGPT"),
+    "setup.claude_need": ("A Claude account with a paid plan (Pro, Max or a company plan); the free plan is not "
+                          "enough.",
+                          "Ein Claude-Konto mit einem bezahlten Abo (Pro, Max oder Firmen-Abo); das kostenlose "
+                          "reicht nicht.",
+                          "Аккаунт Claude с платной подпиской (Pro, Max или рабочей); бесплатного не хватит."),
+    "setup.codex_need": ("A ChatGPT account; with Plus, Pro or a company plan it works for sure.",
+                         "Ein ChatGPT-Konto; mit Plus, Pro oder einem Firmen-Abo funktioniert es sicher.",
+                         "Аккаунт ChatGPT; с подпиской Plus, Pro или рабочей точно работает."),
+    "setup.choose": ("Connect {name}", "{name} verbinden", "Подключить {name}"),
+    "setup.no_account": ("No account yet? Create one first:", "Noch kein Konto? Erst eines anlegen:",
+                         "Нет аккаунта? Сначала заведите его:"),
+    "setup.other_account": ("another account", "anderes Konto", "другой аккаунт"),
+    "setup.connect": ("Connect {name}", "{name} verbinden", "Подключение {name}"),
+    "setup.step_button": ("Press the blue button below. A {shell} window with text opens: you do not have to type "
+                          "anything in it.",
+                          "Drücken Sie die blaue Schaltfläche unten. Ein {shell}-Fenster mit Text öffnet sich: Sie "
+                          "müssen darin nichts eintippen.",
+                          "Нажмите синюю кнопку ниже. Откроется окно {shell} с текстом — печатать в нём ничего не "
+                          "нужно."),
+    "setup.step_uac": ("If Windows asks “Do you want to allow this app to make changes?”, press Yes.",
+                       "Wenn Windows fragt „Möchten Sie zulassen, dass durch diese App Änderungen vorgenommen "
+                       "werden?“, klicken Sie auf Ja.",
+                       "Если Windows спросит «Разрешить этому приложению вносить изменения?», нажмите «Да»."),
+    "setup.step_wait": ("Wait one to three minutes while it installs.",
+                        "Warten Sie ein bis drei Minuten, während installiert wird.",
+                        "Подождите одну–три минуты, пока идёт установка."),
+    "setup.step_browser": ("Your browser opens. Sign in to your {account} account there and confirm (Authorize / "
+                           "Continue).",
+                           "Ihr Browser öffnet sich. Melden Sie sich dort bei Ihrem {account}-Konto an und "
+                           "bestätigen Sie (Authorize / Continue).",
+                           "Откроется браузер. Войдите в свой аккаунт {account} и подтвердите вход (кнопка "
+                           "Authorize или Continue)."),
+    "setup.step_back": ("Come back here. This window notices by itself when everything is ready.",
+                        "Kommen Sie hierher zurück. Dieses Fenster merkt selbst, wenn alles fertig ist.",
+                        "Вернитесь сюда. Это окно само заметит, когда всё готово."),
+    "setup.state_checking": ("Checking this computer…", "Dieser Computer wird geprüft…", "Проверяю компьютер…"),
+    "setup.state_missing": ("{name} is not installed on this computer yet.",
+                            "{name} ist auf diesem Computer noch nicht installiert.",
+                            "{name} ещё не установлен на этом компьютере."),
+    "setup.state_login": ("{name} is installed; only the sign-in is missing.",
+                          "{name} ist installiert; es fehlt nur noch die Anmeldung.",
+                          "{name} установлен, осталось только войти в аккаунт."),
+    "setup.state_started": ("Running in the {shell} window. Follow the steps there and sign in in the browser.",
+                            "Läuft im {shell}-Fenster. Folgen Sie dort den Schritten und melden Sie sich im "
+                            "Browser an.",
+                            "Идёт в окне {shell}. Следите за шагами там и войдите в браузере."),
+    "setup.state_ready": ("{name} is connected and ready", "{name} ist verbunden und bereit",
+                          "{name} подключён и готов"),
+    "setup.install": ("Install and sign in", "Installieren und anmelden", "Установить и войти"),
+    "setup.login": ("Sign in", "Anmelden", "Войти в аккаунт"),
+    "setup.done": ("✓  Done", "✓  Fertig", "✓  Готово"),
+    "setup.started_note": ("Closed the window by mistake, or nothing happens? Press the button again.",
+                           "Fenster versehentlich geschlossen oder passiert nichts? Drücken Sie die Schaltfläche "
+                           "erneut.",
+                           "Случайно закрыли окно или ничего не происходит? Нажмите кнопку ещё раз."),
+    "setup.expert_show": ("For specialists: the commands ▸", "Für Fachleute: die Befehle ▸",
+                          "Для специалистов: команды ▸"),
+    "setup.expert_hide": ("For specialists: the commands ▾", "Für Fachleute: die Befehle ▾",
+                          "Для специалистов: команды ▾"),
+    "install.claude_name": ("Claude", "Claude", "Claude"),
+    "install.codex_name": ("ChatGPT", "ChatGPT", "ChatGPT"),
+    "install.shell_intro": ("Connecting {name} to Live Transcription. Please do not close this window; you do not "
+                            "need to type anything.",
+                            "{name} wird mit Live Transcription verbunden. Bitte dieses Fenster nicht schließen; "
+                            "Sie müssen nichts eintippen.",
+                            "Подключаю {name} к Live Transcription. Не закрывайте это окно; печатать ничего не "
+                            "нужно."),
+    "install.shell_step": ("Step {n} of {total}: {what}", "Schritt {n} von {total}: {what}",
+                           "Шаг {n} из {total}: {what}"),
+    "install.do_claude": ("installing Claude…", "Claude wird installiert…", "устанавливаю Claude…"),
+    "install.do_codex": ("installing the ChatGPT program (Codex)…", "das ChatGPT-Programm (Codex) wird installiert…",
+                         "устанавливаю программу ChatGPT (Codex)…"),
+    "install.do_node": ("installing Node.js, which the ChatGPT program needs (Windows may ask you to allow it)…",
+                        "Node.js wird installiert, das das ChatGPT-Programm braucht (Windows fragt eventuell nach "
+                        "Erlaubnis)…",
+                        "устанавливаю Node.js, он нужен программе ChatGPT (Windows может спросить разрешения)…"),
+    "install.do_path": ("making it available in Terminal…", "im Terminal verfügbar machen…",
+                        "делаю доступным в Терминале…"),
+    "install.do_login": ("the browser opens now: sign in to your account and confirm.",
+                         "der Browser öffnet sich jetzt: Melden Sie sich an und bestätigen Sie.",
+                         "сейчас откроется браузер: войдите в свой аккаунт и подтвердите вход."),
+    "install.shell_failed": ("The installation did not work. Check the internet connection and press the blue "
+                             "button in Live Transcription again.",
+                             "Die Installation hat nicht geklappt. Prüfen Sie die Internetverbindung und drücken "
+                             "Sie die blaue Schaltfläche in Live Transcription erneut.",
+                             "Установка не удалась. Проверьте интернет и снова нажмите синюю кнопку в Live "
+                             "Transcription."),
+    "install.shell_done": ("Done. You can close this window and go back to Live Transcription.",
+                           "Fertig. Sie können dieses Fenster schließen und zu Live Transcription zurückkehren.",
+                           "Готово. Это окно можно закрыть и вернуться в Live Transcription."),
     "win.ai_rules": ("The text goes to the chosen AI under your account (a local model keeps it on the "
                      "computer), so only if the rules you work under allow it.",
                      "Der Text geht an die gewählte KI unter Ihrem Konto (ein lokales Modell behält ihn auf "

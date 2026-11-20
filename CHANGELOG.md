@@ -2,10 +2,12 @@
 
 ## Unreleased
 
-- Without any AI, the yellow panel has a "How to install an AI…" button on Windows and macOS: the
-  official steps for Claude Code or the Codex CLI with a Copy button per command, and a button
-  that runs them in a visible PowerShell or Terminal window, where the sign-in happens. Closing
-  it looks for the AIs again.
+- Without any AI, the yellow panel has a "Connect an AI…" button on Windows and macOS. It asks
+  which account the person has (Claude or ChatGPT), says in plain words what will happen, and one
+  button installs Claude Code or the Codex CLI and signs in (`claude auth login`, `codex login`)
+  in a visible PowerShell or Terminal window that names each step. The window checks the computer
+  every few seconds and says when the AI is ready; an installed AI without a sign-in gets a
+  "Sign in" button. The commands, each with a Copy button, are folded away for specialists.
 - macOS: Codex and Claude Code in ~/.local/bin are found even when the app is opened from Finder.
 - Check with an empty path looks for the AIs again in the background instead of freezing the
   window.

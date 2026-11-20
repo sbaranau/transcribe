@@ -89,6 +89,7 @@ class App:
         self.paragraph_start = self.last_end = self.last_label = None
         self.drafts = {}  # label -> unfinished phrase
         self.found_ai = {}
+        self.ai_setup = None  # the window that connects an AI (AiSetupDialog), while open
         # Recordings made elsewhere, chosen to be transcribed (None: the live recording flow).
         self.files = None
         self.model_loading = False
@@ -1384,48 +1385,10 @@ class App:
         self.show_ai(usable, {})
 
     def show_ai_install(self) -> None:
-        """The official steps to install Claude Code or the Codex CLI (ai_install.py): each
-        command with a Copy button, and a button that runs all of them in a visible PowerShell or
-        Terminal window. Closing it looks for the AIs again."""
-        dialog = tk.Toplevel(self.root)
-        dialog.title(t("win.install_ai_title"))
-        dialog.minsize(640, 460)
-        dialog.transient(self.root)
-        mono = ("Consolas", 10) if os.name == "nt" else ("Menlo", 11)
-        ttk.Label(dialog, text=t("win.install_ai_title"), font=(FONT, 15, "bold")).pack(
-            anchor="w", padx=20, pady=(18, 4))
-        ttk.Label(dialog, text=t("win.install_ai_copy_win" if os.name == "nt" else "win.install_ai_copy_mac"), wraplength=700,
-                  justify="left").pack(anchor="w", padx=20, pady=(0, 8))
-        for title, steps in ai_install.GUIDES:
-            box = ttk.LabelFrame(dialog, text=" " + t(title) + " ", padding=10)
-            box.pack(fill="x", padx=20, pady=(6, 4))
-            box.columnconfigure(0, weight=1)
-            row = 0
-            for number, (text, command) in enumerate(steps, start=1):
-                ttk.Label(box, text=f"{number}. {t(text)}", wraplength=640, justify="left").grid(
-                    row=row, column=0, columnspan=2, sticky="w", pady=(4 if row else 0, 1))
-                field = ttk.Entry(box, font=mono)
-                field.insert(0, command)
-                field.configure(state="readonly")
-                field.grid(row=row + 1, column=0, sticky="ew")
-                ttk.Button(box, text=t("win.copy_short"), width=10,
-                           command=lambda c=command: self.copy_command(c)).grid(
-                    row=row + 1, column=1, sticky="e", padx=(6, 0))
-                row += 2
-            primary_label(box, t("win.install_run", shell=ai_install.SHELL), ("#1f6fc5", "#195ba3"),
-                          lambda s=steps: ai_install.run_in_shell([c for _, c in s]), size=11).grid(
-                row=row, column=0, columnspan=2, sticky="w", pady=(10, 0))
-        ttk.Label(dialog, text=t("win.install_ai_after"), style="Note.TLabel", wraplength=700,
-                  justify="left").pack(anchor="w", padx=20, pady=(8, 4))
-
-        def close() -> None:
-            dialog.destroy()
-            self.search_ai()  # an AI installed meanwhile is offered right away
-
-        ttk.Button(dialog, text=t("win.install_ai_done"), command=close).pack(pady=(4, 16))
-        dialog.protocol("WM_DELETE_WINDOW", close)
-        dialog.bind("<Escape>", lambda _event: close())
-        dialog.grab_set()
+        if self.ai_setup is not None and self.ai_setup.window.winfo_exists():
+            self.ai_setup.window.lift()
+            return
+        self.ai_setup = AiSetupDialog(self)
 
     def copy_command(self, command: str) -> None:
         self.root.clipboard_clear()
@@ -1955,6 +1918,9 @@ class App:
                     self.stopping_overlay.place_forget()
                     self.status.configure(text=t("win.error"), foreground=RED)
                     messagebox.showerror(t("win.error"), t("win.stop_failed", error=data))
+                elif kind == "ai_setup":
+                    if self.ai_setup is not None:
+                        self.ai_setup.checked(*data)
                 elif kind == "ai":
                     self.show_ai(*data)
                 elif kind == "log":
@@ -2023,6 +1989,220 @@ class App:
             self.session.stop()
         self.stop_probe()
         self.root.destroy()
+
+
+class AiSetupDialog:
+    """Connecting an AI in plain words (ai_install.py): first which account the person has,
+    Claude or ChatGPT; then what will happen, one button that installs and signs in, and a status
+    that the window keeps up to date by itself until the AI is ready. The commands are there too,
+    folded away, for those who want to see or copy them. Closing it looks for the AIs again."""
+
+    COLOURS = {"checking": ("#f0f0f0", GREY), "missing": ("#f0f0f0", "#444444"),
+               "login": ("#fff3c4", "#5d4300"), "ready": ("#e6f4ea", GREEN), "started": ("#e8f0fb", "#174a85")}
+
+    def __init__(self, app: "App"):
+        self.app = app
+        self.engine = None
+        self.state = "checking"
+        self.checking = False
+        self.started = False
+        self.window = tk.Toplevel(app.root)
+        self.window.title(t("setup.title"))
+        self.window.minsize(640, 420)
+        self.window.transient(app.root)
+        self.window.protocol("WM_DELETE_WINDOW", self.close)
+        self.window.bind("<Escape>", lambda _event: self.close())
+        self.page = None
+        self.show_choice()
+        self.window.after(3000, self.watch)
+
+    def new_page(self) -> ttk.Frame:
+        if self.page is not None:
+            self.page.destroy()
+        self.page = ttk.Frame(self.window, padding=(22, 18, 22, 16))
+        self.page.pack(fill="both", expand=True)
+        return self.page
+
+    @staticmethod
+    def name(engine: str) -> str:
+        return t("install.claude_name") if engine == "claude" else t("install.codex_name")
+
+    # --- page 1: which account ----------------------------------------------------------------
+
+    def show_choice(self) -> None:
+        self.engine = None
+        page = self.new_page()
+        ttk.Label(page, text=t("setup.title"), font=(FONT, 16, "bold")).pack(anchor="w")
+        ttk.Label(page, text=t("setup.intro"), font=(FONT, 11), wraplength=620, justify="left").pack(
+            anchor="w", pady=(6, 14))
+        cards = ttk.Frame(page)
+        cards.pack(fill="x")
+        cards.columnconfigure((0, 1), weight=1, uniform="card")
+        for column, engine in enumerate(("claude", "codex")):
+            card = tk.Frame(cards, background="white", highlightbackground="#cfcfcf", highlightthickness=1,
+                            padx=16, pady=14)
+            card.grid(row=0, column=column, sticky="nsew", padx=(0, 6) if column == 0 else (6, 0))
+            tk.Label(card, text=t(f"setup.{engine}_account"), font=(FONT, 14, "bold"), background="white").pack()
+            tk.Label(card, text=t(f"setup.{engine}_need"), font=(FONT, 10), foreground=GREY, background="white",
+                     wraplength=260, justify="center", height=4, anchor="n").pack(pady=(4, 10))
+            primary_label(card, t("setup.choose", name=self.name(engine)), ("#1f6fc5", "#195ba3"),
+                          lambda e=engine: self.show_engine(e), size=11).pack(fill="x")
+        line = ttk.Frame(page)
+        line.pack(anchor="w", pady=(16, 0))
+        ttk.Label(line, text=t("setup.no_account"), style="Note.TLabel").pack(side="left")
+        for engine in ("claude", "codex"):
+            link = tk.Label(line, text=ai_install.SIGN_UP[engine].split("//")[1], font=(FONT, 9, "underline"),
+                            foreground="#1565c0", cursor="hand2")
+            link.bind("<Button-1>", lambda _event, e=engine: webbrowser.open(ai_install.SIGN_UP[e]))
+            link.pack(side="left", padx=(6, 0))
+        ttk.Button(page, text=t("win.close"), command=self.close).pack(side="bottom", anchor="e")
+
+    # --- page 2: install and sign in ------------------------------------------------------------
+
+    def show_engine(self, engine: str) -> None:
+        self.engine = engine
+        self.started = False
+        self.state = "checking"
+        name = self.name(engine)
+        page = self.new_page()
+        back = tk.Label(page, text="← " + t("setup.other_account"), font=(FONT, 10, "underline"),
+                        foreground="#1565c0", cursor="hand2")
+        back.bind("<Button-1>", lambda _event: self.show_choice())
+        back.pack(anchor="w")
+        ttk.Label(page, text=t("setup.connect", name=name), font=(FONT, 16, "bold")).pack(anchor="w", pady=(8, 8))
+        self.banner = tk.Label(page, font=(FONT, 11, "bold"), anchor="w", justify="left", padx=12, pady=9,
+                               wraplength=600)
+        self.banner.pack(fill="x", pady=(0, 12))
+        steps = [t("setup.step_button", shell=ai_install.SHELL)]
+        if os.name == "nt" and engine == "codex":
+            steps.append(t("setup.step_uac"))
+        steps += [t("setup.step_wait"), t("setup.step_browser", account=t(f"setup.{engine}_account")),
+                  t("setup.step_back")]
+        self.steps_frame = ttk.Frame(page)
+        self.steps_frame.pack(fill="x")
+        for number, text in enumerate(steps, start=1):
+            row = ttk.Frame(self.steps_frame)
+            row.pack(fill="x", pady=3)
+            tk.Label(row, text=str(number), font=(FONT, 11, "bold"), foreground="white", background="#1f6fc5",
+                     width=2).pack(side="left", anchor="n", padx=(0, 10))
+            ttk.Label(row, text=text, font=(FONT, 11), wraplength=560, justify="left").pack(side="left", anchor="w")
+        self.action_line = ttk.Frame(page)
+        self.action_line.pack(fill="x", pady=(14, 4))
+        self.action = None
+        self.note = ttk.Label(page, text="", style="Note.TLabel", wraplength=600, justify="left")
+        self.note.pack(anchor="w")
+        # For whoever wants to see what runs: the commands, each with a Copy button.
+        self.expert_button = ttk.Button(page, text=t("setup.expert_show"), command=self.toggle_expert)
+        self.expert_button.pack(anchor="w", pady=(10, 0))
+        self.expert = ttk.Frame(page)
+        mono = ("Consolas", 9) if os.name == "nt" else ("Menlo", 11)
+        for command in ai_install.commands(engine):
+            line = ttk.Frame(self.expert)
+            line.pack(fill="x", pady=1)
+            field = ttk.Entry(line, font=mono)
+            field.insert(0, command)
+            field.configure(state="readonly")
+            field.pack(side="left", fill="x", expand=True)
+            ttk.Button(line, text=t("win.copy_short"), command=lambda c=command: self.app.copy_command(c)).pack(
+                side="left", padx=(6, 0))
+        self.footer = ttk.Frame(page)
+        self.footer.pack(side="bottom", fill="x")
+        ttk.Button(self.footer, text=t("win.close"), command=self.close).pack(side="right")
+        self.show_state()
+        self.check_now()
+
+    def toggle_expert(self) -> None:
+        if self.expert.winfo_manager():
+            self.expert.pack_forget()
+            self.expert_button.configure(text=t("setup.expert_show"))
+        else:
+            self.expert.pack(fill="x", pady=(6, 0), after=self.expert_button)
+            self.expert_button.configure(text=t("setup.expert_hide"))
+
+    def show_state(self, account: str = "") -> None:
+        name = self.name(self.engine)
+        shown = "started" if self.started and self.state in ("missing", "login") else self.state
+        background, foreground = self.COLOURS[shown]
+        if "@" not in account:
+            account = ""  # Codex says only "ChatGPT" here, which the name already says
+        # The steps are what still has to happen: gone once the AI is ready.
+        if self.state == "ready":
+            self.steps_frame.pack_forget()
+        elif not self.steps_frame.winfo_manager():
+            self.steps_frame.pack(fill="x", after=self.banner)
+        text = {"checking": t("setup.state_checking"),
+                "missing": t("setup.state_missing", name=name),
+                "login": t("setup.state_login", name=name),
+                "started": t("setup.state_started", shell=ai_install.SHELL),
+                "ready": t("setup.state_ready", name=name) + (f" ({account})" if account else "")}[shown]
+        self.banner.configure(text=("✓  " if shown == "ready" else "") + text, background=background,
+                              foreground=foreground)
+        if self.action is not None:
+            self.action.destroy()
+        if self.state == "ready":
+            self.action = primary_label(self.action_line, t("setup.done"), ("#168447", "#106a38"), self.close, size=13)
+        elif self.state in ("missing", "login"):
+            label = t("setup.install") if self.state == "missing" else t("setup.login")
+            self.action = primary_label(self.action_line, ("↻  " if self.started else "▶  ") + label,
+                                        ("#1f6fc5", "#195ba3"), self.start, size=13)
+        else:
+            self.action = None
+        if self.action is not None:
+            self.action.pack(anchor="w")
+        self.note.configure(text=t("setup.started_note") if self.started and self.state != "ready" else "")
+
+    def start(self) -> None:
+        try:
+            ai_install.run(self.engine, login_only=self.state == "login")
+        except OSError as error:
+            messagebox.showerror(t("win.error"), str(error), parent=self.window)
+            return
+        self.started = True
+        self.show_state()
+
+    # --- watching the result --------------------------------------------------------------------
+
+    def check_now(self) -> None:
+        if self.checking or self.engine is None:
+            return
+        self.checking = True
+        engine = self.engine
+
+        def work():
+            try:
+                state, account = ai_install.status(engine)
+            except Exception as error:  # a check that fails is retried on the next round
+                print(f"AI setup check failed: {error}", flush=True)
+                state, account = "checking", ""
+            self.app.events.put(("ai_setup", (engine, state, account)))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def checked(self, engine: str, state: str, account: str) -> None:
+        self.checking = False
+        if engine != self.engine or not self.window.winfo_exists():
+            return
+        changed = state != self.state
+        self.state = state
+        if changed or state == "ready":
+            self.show_state(account)
+            if state == "ready":
+                self.window.lift()
+
+    def watch(self) -> None:
+        """Checks every few seconds while the window is open; the installer and the sign-in run
+        in their own window, so this is how the result gets here."""
+        if not self.window.winfo_exists():
+            return
+        if self.engine is not None and self.state != "ready":
+            self.check_now()
+        self.window.after(3000, self.watch)
+
+    def close(self) -> None:
+        if self.window.winfo_exists():
+            self.window.destroy()
+        self.app.ai_setup = None
+        self.app.search_ai()  # an AI installed meanwhile is offered right away
 
 
 def stop_process_tree(process: subprocess.Popen) -> None:
