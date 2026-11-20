@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.33 — 2026-11-20
 
 - A modern look: the window uses the Sun Valley theme (sv-ttk, the Windows 11 Fluent style, also
   on macOS) with rounded buttons and fields, and a new "calm ink-blue" palette instead of the
