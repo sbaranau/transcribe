@@ -29,7 +29,12 @@ UninstallDisplayIcon={app}\app\icons\live.ico
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
-CloseApplications=yes
+; An update closes a running Live Transcription itself. The window ends on Windows' request
+; (live_gui.end_session, which also saves a recording); its launcher has no window and cannot
+; be asked, so "force" ends whatever is still running. *.pyd: the packages' modules are locked
+; by the running Python as well.
+CloseApplications=force
+CloseApplicationsFilter=*.exe,*.dll,*.pyd
 RestartApplications=no
 VersionInfoVersion={#MyAppVersion}.0
 VersionInfoDescription=Live Transcription installer

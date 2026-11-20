@@ -104,6 +104,9 @@ class App:
         root.geometry(f"900x{min(820, max(600, root.winfo_screenheight() - 90))}")
         root.minsize(720, 520)
         root.protocol("WM_DELETE_WINDOW", self.on_close)
+        # Windows asks the window to end (an installer updating the app, logging off): Tk turns
+        # WM_QUERYENDSESSION into this protocol. Ended without questions; a recording is saved.
+        root.protocol("WM_SAVE_YOURSELF", self.end_session)
         if sys.platform == "darwin":
             root.createcommand("::tk::mac::Quit", self.on_close)  # Cmd+Q and Quit in the Dock
         style = ttk.Style()
@@ -2019,6 +2022,19 @@ class App:
             self.root.update()
             self.session.stop()
         self.stop_probe()
+        self.root.destroy()
+
+    def end_session(self) -> None:
+        """Ends the application when Windows asks for it, without a question: a running
+        processing is stopped (its finished files stay), a recording is stopped and saved."""
+        print("Closing at the request of Windows (an update or logging off).", flush=True)
+        if self.processing and self.processing.poll() is None:
+            self.cancelled = True
+            stop_process_tree(self.processing)
+        if self.session and not self.session.stopping.is_set():
+            self.session.stop()
+        self.stop_probe()
+        self.restart = False
         self.root.destroy()
 
 

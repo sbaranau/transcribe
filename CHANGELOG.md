@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Windows: the installer could not close a running Live Transcription, because its launcher has
+  no window, and Windows then closes nothing at all. The installer now closes it by force where
+  needed; the window itself ends cleanly when Windows asks (a running processing is stopped, a
+  recording is stopped and saved), also when logging off.
+
 ## v1.31 — 2026-11-20
 
 - The AI setup's choice page shows the state of each AI: "Connected" (with the account) for one
