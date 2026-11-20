@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.31 — 2026-11-20
 
 - The AI setup's choice page shows the state of each AI: "Connected" (with the account) for one
   that is ready, "Sign in" for one that is installed without a sign-in, so a connected AI no
