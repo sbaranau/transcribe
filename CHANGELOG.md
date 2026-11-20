@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.29 — 2026-11-20
 
 - Without any AI, the yellow panel has a "Connect an AI…" button on Windows and macOS. It asks
   which account the person has (Claude or ChatGPT), says in plain words what will happen, and one
