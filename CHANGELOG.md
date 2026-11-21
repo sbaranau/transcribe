@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- macOS: the app bar, the cards and the captions lost their own colours and showed in the plain
+  background colour. The macOS build runs Tk 9, where the theme's palette update repaints every
+  widget when the window is shown; it is now applied once at start only.
+
 ## v1.34 — 2026-11-20
 
 - Icons: the app's icon in the app bar, and small icons from the system's icon font before the

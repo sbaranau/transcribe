@@ -96,6 +96,10 @@ def apply(root, font: str) -> SimpleNamespace:
         # sv-ttk sets its colours on <<ThemeChanged>>, which does not reach a window that is
         # not shown yet: then frames and labels keep Tk's light grey. Called directly instead.
         root.tk.call("configure_colors")
+        # ...and only this once: later, on <<ThemeChanged>> (which Tk 9, as on macOS, sends when
+        # the window is shown), the handler calls tk_setPalette, which in Tk 9 repaints every
+        # widget, so the app bar, cards and captions lost their own colours.
+        root.tk.call("bind", root.winfo_class(), "<<ThemeChanged>>", "")
         recolor_card(root, name)
     except Exception as error:  # an installation without it keeps the system theme
         print(f"Theme not applied: {error}", flush=True)
