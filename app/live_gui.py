@@ -115,8 +115,8 @@ class App:
 
         self.build_header()
         self.screen = None  # "home", "live" (its settings), then the recording and results
-        self.back_bar = ttk.Frame(self.root, padding=(14, 0, 14, 4))
-        ttk.Button(self.back_bar, text=t("win.back"), command=self.show_home).pack(side="left")
+        # Back to the home screen, in the page row; shown on the meeting settings only.
+        self.back_bar = ttk.Button(self.page_row, text=t("win.back"), command=self.show_home)
         self.home_frame = self.build_home()
         self.setup_frame = self.build_setup()
         self.meters_frame = self.build_meters()
@@ -217,25 +217,34 @@ class App:
         self.interface.bind("<<ComboboxSelected>>", self.change_interface)
         self.interface.pack(side="left")
         # Updates, help and about: rarely needed, so one menu instead of three buttons.
-        self.more = ttk.Menubutton(band, text="⋯", width=3)
+        more_icon = theme.glyph("more") or "⋯"
+        self.more = tk.Label(band, text=more_icon, font=(theme.ICON_FONT or FONT, 16), width=2,
+                             background=C.header_bg, foreground=C.header_text, cursor="hand2", takefocus=True)
         self.more_menu = tk.Menu(self.more, tearoff=False)
         self.more_menu.add_command(label=t("win.update"), command=self.manual_update)
         self.more_menu.add_command(label=t("win.help"), command=self.show_help)
         self.more_menu.add_command(label=t("win.about"), command=self.show_about)
-        self.more["menu"] = self.more_menu
+        def open_menu(_event=None):
+            self.more_menu.tk_popup(self.more.winfo_rootx(), self.more.winfo_rooty() + self.more.winfo_height())
+        for sequence in ("<Button-1>", "<Return>", "<space>"):
+            self.more.bind(sequence, open_menu)
+        self.more.bind("<Enter>", lambda _event: self.more.configure(background=C.header_hover))
+        self.more.bind("<Leave>", lambda _event: self.more.configure(background=C.header_bg))
         self.more.pack(side="right", padx=(8, 0), before=self.interface_box)
         self.timer = tk.Label(band, text="", font=(FONT, 15, "bold"), background=C.header_bg,
                               foreground=C.header_text)
         self.timer.pack(side="right", padx=(0, 8))
         # The state of the work (ready, recording, done...), below the bar in the window's colours.
-        line = ttk.Frame(self.root, padding=(20, 10, 20, 0))
-        line.pack(fill="x")
-        self.status = ttk.Label(line, text=t("win.loading"), foreground=GREY, font=(FONT, 11, "bold"))
-        self.status.pack(anchor="w")
+        self.page_row = ttk.Frame(self.root, padding=(20, 12, 20, 2))
+        self.page_row.pack(fill="x")
+        self.status = StatusPill(self.page_row)
+        self.status.configure(text=t("win.loading"), foreground=GREY)
+        self.status.pack(side="right")
 
     def build_setup(self) -> ttk.Frame:
-        frame = ttk.LabelFrame(self.root, padding=12)
+        frame = ttk.LabelFrame(self.root, padding=(16, 10, 16, 16))
         frame.configure(labelwidget=heading(frame, "settings", t("win.before")))
+        frame.columnconfigure(0, minsize=210)
         frame.columnconfigure(1, weight=1)
         self.advanced_visible = False
         self.advanced_widgets = []
@@ -245,7 +254,7 @@ class App:
             self.base_folder = os.path.abspath(os.path.expanduser(remembered["folder"]))
         self.languages = [(None, t("meeting.auto"))] + ui_text.meeting_languages()
         ttk.Label(frame, text=t("win.language")).grid(row=0, column=0, sticky="w", pady=3)
-        self.language = ttk.Combobox(frame, state="readonly", values=[name for _, name in self.languages], width=34)
+        self.language = ttk.Combobox(frame, state="readonly", values=[name for _, name in self.languages], width=40)
         wanted = self.args.language or remembered.get("language") or None
         default = next((i for i, (code, _) in enumerate(self.languages) if code == wanted), 0)
         self.language.current(default)
@@ -257,7 +266,7 @@ class App:
         ttk.Label(frame, text=t("win.translate_to")).grid(row=1, column=0, sticky="nw", pady=(6, 3))
         line = ttk.Frame(frame)
         line.grid(row=1, column=1, sticky="w", pady=3)
-        self.translate_to = ttk.Combobox(line, state="readonly", values=[name for _, name in self.targets], width=34)
+        self.translate_to = ttk.Combobox(line, state="readonly", values=[name for _, name in self.targets], width=40)
         wanted = remembered.get("translate") or None
         self.translate_to.current(next((i for i, (code, _) in enumerate(self.targets) if code == wanted), 0))
         self.translate_to.bind("<<ComboboxSelected>>", self.prepare_translation)
@@ -273,7 +282,7 @@ class App:
         ttk.Label(frame, text=t("win.microphone")).grid(row=2, column=0, sticky="w", pady=3)
         microphone_line = ttk.Frame(frame)
         microphone_line.grid(row=2, column=1, sticky="w", pady=3)
-        self.microphone = ttk.Combobox(microphone_line, state="readonly", width=50,
+        self.microphone = ttk.Combobox(microphone_line, state="readonly", width=40,
                                        values=list(self.microphones) + [t("win.no_microphone")])
         self.microphone.bind("<<ComboboxSelected>>", lambda _event: self.start_probe())
         # Levels before the start, so a silent microphone is noticed before the meeting.
@@ -354,14 +363,18 @@ class App:
         for widget in self.advanced_widgets:
             widget.grid_remove()
 
-        tk.Label(
-            frame, text=t("win.tell_people"), background=C.warn_bg, foreground=C.warn_text,
-            font=(FONT, 10), anchor="w", padx=10, pady=7).grid(
-                row=7, column=0, columnspan=2, sticky="ew", pady=(10, 4))
+        notice = tk.Frame(frame, background=C.warn_bg, highlightthickness=1, highlightbackground=C.warn_border,
+                          padx=10, pady=7)
+        notice.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(14, 4))
+        if theme.ICON_FONT:
+            tk.Label(notice, text="\ue7ba", font=(theme.ICON_FONT, 11), background=C.warn_bg,
+                     foreground=C.warn_text).pack(side="left", padx=(0, 8))
+        tk.Label(notice, text=t("win.tell_people"), background=C.warn_bg, foreground=C.warn_text,
+                 font=(FONT, 10), anchor="w").pack(side="left", fill="x")
         # Enabled once the model is loaded (and a translation model, if one is chosen).
         self.start_button = ttk.Button(frame, text=t("win.start"), style="Huge.Accent.TButton",
                                        command=self.start, state="disabled")
-        self.start_button.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(12, 2))
+        self.start_button.grid(row=8, column=0, columnspan=2, sticky="w", pady=(14, 2), ipadx=40)
         return frame
 
     # --- home screen ------------------------------------------------------------------------------
@@ -399,7 +412,7 @@ class App:
         ttk.Label(frame, text=f"Live Transcription {updates.current_version()}  ·  {theme.COPYRIGHT}",
                   style="Note.TLabel").pack(side="bottom", anchor="w", pady=(12, 0))
         self.recent_frame = ttk.Frame(frame)
-        self.recent_frame.pack(fill="x", pady=(18, 0))
+        self.recent_frame.pack(fill="x", pady=(22, 0), padx=(0, 0))
         return frame
 
     def refresh_recent(self) -> None:
@@ -411,14 +424,30 @@ class App:
         heading(self.recent_frame, "history", t("home.recent"), size=9, foreground=C.muted).pack(
             anchor="w", pady=(0, 6))
         for item in items:
-            line = ttk.Frame(self.recent_frame)
-            line.pack(anchor="w", pady=1)
-            link = tk.Label(line, text=item["name"], font=(FONT, 10, "underline"), foreground=C.link,
-                            cursor="hand2")
-            link.bind("<Button-1>", lambda _event, folder=item["folder"]: tool.open_path(folder))
-            link.pack(side="left")
+            row = tk.Frame(self.recent_frame, background=C.bg, padx=6, pady=4, cursor="hand2")
+            row.pack(fill="x")
+            symbol = theme.glyph("page" if item.get("kind") != "live" else "transcript")
+            parts = []
+            if symbol:
+                parts.append(tk.Label(row, text=symbol, font=(theme.ICON_FONT, 11), background=C.bg,
+                                      foreground=C.muted))
+                parts[-1].pack(side="left", padx=(0, 8))
+            name = tk.Label(row, text=item["name"], font=(FONT, 10), foreground=C.link, background=C.bg)
+            name.pack(side="left")
             kind = t("home.kind_live") if item.get("kind") == "live" else t("home.kind_file")
-            ttk.Label(line, text=f"  {kind} · {item.get('date', '')}", style="Note.TLabel").pack(side="left")
+            details = tk.Label(row, text=f"{kind} · {item.get('date', '')}", font=(FONT, 9),
+                               foreground=C.muted, background=C.bg)
+            details.pack(side="right")
+            widgets = [row, name, details] + parts
+
+            def hover(_event, widgets=widgets, name=name, on=True):
+                for widget in widgets:
+                    widget.configure(background=C.neutral_bg if on else C.bg)
+                name.configure(font=(FONT, 10, "underline") if on else (FONT, 10))
+            for widget in widgets:
+                widget.bind("<Button-1>", lambda _event, folder=item["folder"]: tool.open_path(folder))
+                widget.bind("<Enter>", hover)
+                widget.bind("<Leave>", lambda event, h=hover: h(event, on=False))
 
     def show_home(self) -> None:
         self.screen = "home"
@@ -432,7 +461,7 @@ class App:
     def show_live_setup(self) -> None:
         self.screen = "live"
         self.home_frame.pack_forget()
-        self.back_bar.pack(fill="x")
+        self.back_bar.pack(side="left")
         self.setup_frame.pack(fill="x", padx=14, pady=(0, 8))
         if self.model is None and not self.model_loading:
             self.start_model_loading()
@@ -483,8 +512,8 @@ class App:
     @staticmethod
     def setup_meter(parent) -> tuple:
         """(canvas, bar, note, [time sound was last heard]); the caller places canvas and note."""
-        canvas = tk.Canvas(parent, height=10, width=140, highlightthickness=0, background=C.track)
-        bar = canvas.create_rectangle(0, 0, 0, 10, fill=GREEN, width=0)
+        canvas = tk.Canvas(parent, height=6, width=300, highlightthickness=0, background=C.track)
+        bar = canvas.create_rectangle(0, 0, 0, 6, fill=GREEN, width=0)
         note = ttk.Label(parent, text="", style="Note.TLabel")
         return canvas, bar, note, [time.time()]
 
@@ -496,7 +525,7 @@ class App:
         microphone = self.microphones.get(self.microphone.get())
         speakers = [speaker for speaker, var in self.speakers if var.get()]
         for canvas, bar, note, heard in self.setup_meters.values():
-            canvas.coords(bar, 0, 0, 0, 10)
+            canvas.coords(bar, 0, 0, 0, 6)
             note.configure(text="")
             heard[0] = time.time()
         try:
@@ -1512,8 +1541,11 @@ class App:
     ]
     @staticmethod
     def step_mark(state: str) -> tuple[str, str, bool]:
-        return {"pending": ("○", GREY, False), "active": ("●", C.text, True), "done": ("✓", GREEN, False),
-                "skipped": ("–", GREY, False), "failed": ("✗", RED, True)}[state]
+        marks = {"pending": ("○", "\uea3a", GREY, False), "active": ("●", "\ue91f", C.accent, True),
+                 "done": ("✓", "\ue73e", GREEN, False), "skipped": ("–", "\ue738", GREY, False),
+                 "failed": ("✗", "\ue711", RED, True)}
+        text, glyph, colour, bold = marks[state]
+        return (glyph if theme.ICON_FONT else text), colour, bold
 
     def build_steps(self) -> None:
         """The steps this run will take, from the chosen options."""
@@ -1536,7 +1568,7 @@ class App:
         for key, title in wanted:
             row = ttk.Frame(self.steps_box)
             row.pack(anchor="w", fill="x")
-            mark = tk.Label(row, width=2, font=(FONT, 11), anchor="w")
+            mark = tk.Label(row, width=2, font=(theme.ICON_FONT or FONT, 11), anchor="w")
             mark.pack(side="left")
             name = tk.Label(row, text=title, font=(FONT, 10), anchor="w")
             name.pack(side="left")
@@ -1689,7 +1721,7 @@ class App:
                 widget.configure(state="disabled")
             self.search_again_button.configure(state="disabled")
             if self.files is not None:
-                self.change_files_button.configure(state="disabled")
+                self.change_files_button.pack_forget()
                 if self.file_language:
                     self.file_language.configure(state="disabled")
             self.run_button.pack_forget()
@@ -1715,7 +1747,7 @@ class App:
             if self.ai_state != "searching":
                 self.search_again_button.configure(state="normal")
             if self.files is not None:
-                self.change_files_button.configure(state="normal")
+                self.change_files_button.pack(side="right", anchor="n")
                 if self.file_language:
                     self.file_language.configure(state="readonly")
         self.refresh_export(locked)
@@ -1853,8 +1885,8 @@ class App:
         panel = self.done_panel
         for child in panel.winfo_children():
             child.destroy()
-        background = C.error_bg if failed else C.success_bg
-        panel.configure(background=background, highlightbackground=C.error_border if failed else C.success_border)
+        background = C.bg
+        panel.configure(background=background, highlightthickness=0, padx=4, pady=6)
         took = about_minutes(time.time() - self.processing_started)
         title = ("⚠  " + t("win.done_with_errors")) if failed else ("✓  " + t("win.done_in", time=took))
         tk.Label(panel, text=title, font=(FONT, 13, "bold"), foreground=RED if failed else GREEN,
@@ -1869,25 +1901,29 @@ class App:
             for number, (key, path) in enumerate(results):
                 label = t("win.open", what=t(key))
                 if number == 0 and not several:
-                    primary_label(line, label, ("#168447", "#106a38"),
-                                  lambda p=path: tool.open_path(p), size=12).pack(side="left", padx=(0, 8))
+                    ttk.Button(line, text=label, style="Big.Accent.TButton",
+                               command=lambda p=path: tool.open_path(p)).pack(side="left", padx=(0, 8))
                 else:
-                    ttk.Button(line, text=label, command=lambda p=path: tool.open_path(p)).pack(
-                        side="left", padx=(0, 6))
+                    ttk.Button(line, text=label, style="Tall.TButton" if not several else "TButton",
+                               command=lambda p=path: tool.open_path(p)).pack(side="left", padx=(0, 8))
+            if not several:
+                ttk.Button(line, text=t("win.open_folder"), style="Tall.TButton",
+                           command=self.open_folder).pack(side="left")
             if not results:
                 tk.Label(line, text=t("win.no_results"), font=(FONT, 10), background=background).pack(side="left")
         line = tk.Frame(panel, background=background)
-        line.pack(fill="x", pady=(12, 0))
-        ttk.Button(line, text=t("win.open_folder"), command=self.open_folder).pack(side="left")
+        line.pack(fill="x", pady=(14, 0))
+        if several:
+            ttk.Button(line, text=t("win.open_folder"), command=self.open_folder).pack(side="left", padx=(0, 12))
         if self.files is None and screenshots.exportable(os.path.dirname(self.session.wav_path)):
             ttk.Button(line, text=t("win.export_html"), command=self.export_html).pack(side="left", padx=(6, 0))
-        details = ttk.Button(line, text=t("win.details_show"), command=self.toggle_details)
-        details.pack(side="right")
         again = tk.Label(line, text=t("win.run_again"), font=(FONT, 10, "underline"), foreground=C.link,
                          background=background, cursor="hand2", takefocus=True)
         for sequence in ("<Button-1>", "<Return>", "<space>"):
             again.bind(sequence, lambda _event: self.run_again())
-        again.pack(side="right", padx=(0, 12))
+        again.pack(side="left", padx=(0, 12))
+        details = ttk.Button(line, text=t("win.details_show"), style="Toolbutton", command=self.toggle_details)
+        details.pack(side="left")
         self.details_buttons = [self.details_buttons[0], details]
         self.fold_options(True, keep=(0,))
         panel.grid(row=17, column=0, columnspan=3, sticky="ew", pady=(10, 2))
@@ -2361,6 +2397,30 @@ def clock_seconds(clock: str) -> float:
 
 def about_minutes(seconds: float) -> str:
     return t("step.minutes", n=round(seconds / 60)) if seconds >= 90 else t("step.under_minutes")
+
+
+class StatusPill(tk.Label):
+    """The state of the work as a small coloured pill. Callers set text and foreground as on a
+    label (GREEN, RED, GREY); the pill picks its colours from that, and is invisible when empty."""
+
+    def __init__(self, parent):
+        super().__init__(parent, font=(FONT, 9, "bold"), padx=10, pady=3, background=C.bg)
+
+    def configure(self, cnf=None, **options):
+        if "foreground" in options or "text" in options:
+            colour = options.pop("foreground", None) or self.cget("foreground")
+            text = options.get("text", self.cget("text"))
+            if not text:
+                options.update(background=C.bg, foreground=C.bg)
+            elif colour == GREEN:
+                options.update(background=C.success_bg, foreground=C.success)
+            elif colour == RED:
+                options.update(background=C.error_bg, foreground=C.error)
+            else:
+                options.update(background=C.info_bg, foreground=C.info_text)
+        return super().configure(cnf, **options)
+
+    config = configure
 
 
 def heading(parent, icon: str, text: str, size: int = 11, foreground: str | None = None) -> tk.Frame:

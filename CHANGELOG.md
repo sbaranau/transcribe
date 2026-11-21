@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- A design polish round:
+  - Back and the work's state share one row; the state shows as a coloured pill (ready, recording,
+    processing, done, errors).
+  - The "⋯" menu is an icon in the app bar instead of a field-like button.
+  - The meeting setup has one label column, fields of one width with the level bars under them,
+    a bordered notice with a warning icon, and a "Start recording" button that no longer spans the
+    whole window.
+  - Processing steps show as icons (done, running, waiting, failed), and "Other files…" is hidden
+    while it runs.
+  - The results have no coloured box any more: a heading, one row of equal-height buttons (open
+    the text, the translation, the folder), then "Change the settings" and "Details".
+  - Recent results are rows with an icon, the name, and the date on the right, highlighted on hover.
+
 ## v1.35 — 2026-11-21
 
 - macOS: the app bar, the cards and the captions lost their own colours and showed in the plain

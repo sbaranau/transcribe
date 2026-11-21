@@ -23,7 +23,7 @@ LIGHT = dict(
     field="#ffffff", field_alt="#f5f8fc", selection="#cfe2fa", track="#dde4ee",
     draft_bg="#eef3f9", record="#c42b1c",
     voices=["#0b7a4b", "#b3206b", "#a85200", "#6b3fc4", "#00788a", "#7a5a3c"],
-    header_bg="#14306b", header_text="#ffffff", header_muted="#b9c8e6",
+    header_bg="#14306b", header_text="#ffffff", header_muted="#b9c8e6", header_hover="#21418a",
     card_icon_bg="#eaf1fc",
 )
 DARK = dict(
@@ -36,7 +36,7 @@ DARK = dict(
     field="#10151d", field_alt="#1a212c", selection="#24476e", track="#2c3646",
     draft_bg="#1d2532", record="#ff6b6b",
     voices=["#6fd38a", "#f48fb8", "#ffb366", "#c9a2ff", "#4dd6e6", "#d4b8a0"],
-    header_bg="#1b2a45", header_text="#f3f6fb", header_muted="#a9b8d3",
+    header_bg="#1b2a45", header_text="#f3f6fb", header_muted="#a9b8d3", header_hover="#26385a",
     card_icon_bg="#22324a",
 )
 
@@ -44,7 +44,8 @@ DARK = dict(
 # Windows 10: Segoe MDL2 Assets, same code points); elsewhere they have none.
 ICON_FONT = None
 GLYPHS = {"settings": "\ue713", "page": "\ue8a5", "results": "\ue9d5", "transcript": "\ue8bd",
-          "translation": "\ue8c1", "history": "\ue81c", "ai": "\ue99a"}
+          "translation": "\ue8c1", "history": "\ue81c", "ai": "\ue99a",
+          "more": "\ue712"}
 COPYRIGHT = "© 2026 sbaranau · MIT License"
 
 
@@ -127,6 +128,8 @@ def apply(root, font: str) -> SimpleNamespace:
     style.configure("TLabelframe.Label", font=(font, 11, "bold"), foreground=C.text)
     style.configure("Note.TLabel", foreground=C.muted, font=(font, 9))
     style.configure("Big.TButton", font=(font, 11, "bold"), padding=(16, 8))
+    # As high as a Big.Accent.TButton, for secondary actions beside it.
+    style.configure("Tall.TButton", font=(font, 10), padding=(16, 11))
     style.configure("Accent.TButton", font=(font, 10, "bold"))
     style.configure("Big.Accent.TButton", font=(font, 12, "bold"), padding=(20, 10))
     style.configure("Huge.Accent.TButton", font=(font, 14, "bold"), padding=(24, 14))
