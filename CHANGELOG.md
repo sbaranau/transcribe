@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.36 — 2026-11-21
 
 - A design polish round:
   - Back and the work's state share one row; the state shows as a coloured pill (ready, recording,
