@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.37 — 2026-11-23
 
 - Mentions: before a meeting you can tick "Tell me when I am named or addressed" and enter the
   names you are called by. Russian names are also found in their case forms, as whole words, in
