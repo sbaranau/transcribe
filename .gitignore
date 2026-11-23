@@ -24,3 +24,4 @@ __pycache__/
 
 # Shortcuts with icons, made by windows\setup.cmd (they hold absolute paths).
 /*.lnk
+*.local.wav

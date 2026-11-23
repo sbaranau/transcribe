@@ -45,7 +45,7 @@ DARK = dict(
 ICON_FONT = None
 GLYPHS = {"settings": "\ue713", "page": "\ue8a5", "results": "\ue9d5", "transcript": "\ue8bd",
           "translation": "\ue8c1", "history": "\ue81c", "ai": "\ue99a",
-          "more": "\ue712"}
+          "more": "\ue712", "bell": "\uea8f"}
 COPYRIGHT = "© 2026 sbaranau · MIT License"
 
 

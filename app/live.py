@@ -527,15 +527,19 @@ class LiveSession:
             self.make_draft()
 
     def make_draft(self) -> None:
-        """Drafts the stream with the most new unfinished sound."""
+        """Drafts the other side if it has new sound, else the stream with the most new sound."""
         best, best_audio = None, None
         for stream in self.streams.values():
             with self.lock:
                 audio = np.concatenate(stream.pending) if stream.pending else np.zeros(0, np.float32)
             new = len(audio) - stream.last_draft_length
             if new >= DRAFT_MIN_NEW_SECONDS * RATE and rms(audio) > SILENCE_LEVEL:
-                if best is None or new > len(best_audio) - best.last_draft_length:
-                    best, best_audio = stream, audio
+                # The other side first: what they say is what you need to read (and to be told
+                # about when they address you), and a microphone that also hears the speakers
+                # would otherwise win with the same words labelled as yours.
+                rank = (stream.key == "computer", new)
+                if best is None or rank > best_rank:
+                    best, best_audio, best_rank = stream, audio, rank
         if best is None:
             return
         best.last_draft_length = len(best_audio)

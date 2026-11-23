@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- Mentions: before a meeting you can tick "Tell me when I am named or addressed" and enter the
+  names you are called by. Russian names are also found in their case forms, as whole words, in
+  the other side's speech ("also my microphone" adds the microphone, for people next to you). Each mention is highlighted (the name on yellow, a bar beside the
+  paragraph) and counted ("Mentions: N", a click shows the next); an alert comes already from the
+  draft, a few seconds after the phrase: a banner with "Show", an optional sound, and when the
+  window is in the background a flashing taskbar button and a system notification. The names
+  also go to the recognition as hints. After the meeting mentions.txt lists every mention, and
+  an AI summary ends with what concerns you (transcribe.py --about-me).
+- The window grows to fit the meeting settings when they need more room.
+- Alerts: the mention sound is the app's own two-tone chime, played twice (the system's notification
+  sounds are often nearly silent); a run from the source folder shows its Windows notifications on
+  behalf of PowerShell, since only the installed app has a registered app ID.
+- The live draft shows the other side first when it has new speech, also when the microphone hears the
+  same words from the speakers.
+
 ## v1.36 — 2026-11-21
 
 - A design polish round:

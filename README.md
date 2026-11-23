@@ -25,6 +25,10 @@ remains available for developers. See the
   pieces, nearly as accurate as transcribing the recording afterwards.
 - **Tells speakers apart** by voice ("Speaker 1", "Speaker 2", ...); on public test meetings (AMI,
   4 people) 98% of the words went to the right person when the number of speakers was given.
+- **Tells you when you are addressed** during a call: give the names you are called by, and
+  each mention is highlighted in the text and announced (banner, sound, system notification
+  when the window is in the background); afterwards `mentions.txt` lists them, and an AI summary
+  ends with what concerns you.
 - **Takes screenshots** with a button during a call (the slide or document being shown) and puts
   each one into the transcript at its moment: `meeting.md`, readable in any Markdown viewer.
 - **Translates** between English, German and Russian locally (Opus-MT), live in a second column

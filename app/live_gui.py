@@ -35,6 +35,7 @@ from tkinter import filedialog, font as tkfont, messagebox, ttk
 import ai_engines
 import ai_install
 import live
+import mentions
 import paths
 import screenshots
 import theme
@@ -117,6 +118,12 @@ class App:
         self.screen = None  # "home", "live" (its settings), then the recording and results
         # Back to the home screen, in the page row; shown on the meeting settings only.
         self.back_bar = ttk.Button(self.page_row, text=t("win.back"), command=self.show_home)
+        # During a meeting: how often you were mentioned; a click shows the next mention.
+        self.mention_counter = tk.Label(self.page_row, font=(FONT, 10, "bold"), background=C.warn_bg,
+                                        foreground=C.warn_text, padx=10, pady=3, cursor="hand2")
+        self.mention_counter.bind("<Button-1>", lambda _event: self.jump_to_mention())
+        self.mention = mentions.Matcher("")
+        self.mention_list = []
         self.home_frame = self.build_home()
         self.setup_frame = self.build_setup()
         self.meters_frame = self.build_meters()
@@ -321,6 +328,30 @@ class App:
             ttk.Label(box, text=t("win.all_devices"),
                       style="Note.TLabel", wraplength=520).pack(anchor="w")
 
+        # Being addressed: the names to listen for, highlighted in the text and announced.
+        ttk.Label(frame, text=t("win.mention_label")).grid(row=4, column=0, sticky="nw", pady=(8, 3))
+        box = ttk.Frame(frame)
+        box.grid(row=4, column=1, sticky="w", pady=(8, 3))
+        self.mention_on = tk.BooleanVar(value=remembered.get("mention") == "1")
+        options = ttk.Frame(box)
+        options.pack(anchor="w")
+        ttk.Checkbutton(options, text=t("win.mention_on"), variable=self.mention_on,
+                        command=self.refresh_mention).pack(side="left")
+        self.mention_sound = tk.BooleanVar(value=remembered.get("mention_sound", "1") == "1")
+        self.mention_sound_box = ttk.Checkbutton(options, text=t("win.mention_sound"), variable=self.mention_sound)
+        self.mention_sound_box.pack(side="left", padx=(16, 0))
+        self.mention_names = ttk.Entry(box, width=40)
+        self.mention_names.insert(0, remembered.get("mention_names", ""))
+        self.mention_names.pack(anchor="w", pady=(4, 0))
+        self.mention_note = ttk.Label(box, text=t("win.mention_note"), style="Note.TLabel", wraplength=560)
+        self.mention_note.pack(anchor="w", pady=(2, 0))
+        # People next to you are heard through your microphone, labelled as you: off by default,
+        # since then your own words count too (introducing yourself, for example).
+        self.mention_mic = tk.BooleanVar(value=remembered.get("mention_mic") == "1")
+        self.mention_mic_box = ttk.Checkbutton(box, text=t("win.mention_mic"), variable=self.mention_mic)
+        self.mention_mic_box.pack(anchor="w", pady=(2, 0))
+        self.refresh_mention()
+
         # Screenshots with a button during the recording: of which screen.
         self.screens = []
         if screenshots.SUPPORTED:
@@ -334,9 +365,9 @@ class App:
                 self.screens.append((t("win.screen_all"), screenshots.all_screens(found)))
         if self.screens:
             screen_label = ttk.Label(frame, text=t("win.shots_of"))
-            screen_label.grid(row=5, column=0, sticky="nw", pady=(6, 3))
+            screen_label.grid(row=6, column=0, sticky="nw", pady=(6, 3))
             line = ttk.Frame(frame)
-            line.grid(row=5, column=1, sticky="w", pady=3)
+            line.grid(row=6, column=1, sticky="w", pady=3)
             self.screen_choice = ttk.Combobox(line, state="readonly", width=34,
                                               values=[name for name, _ in self.screens])
             wanted = remembered.get("screen", "")
@@ -346,9 +377,9 @@ class App:
             self.advanced_widgets.extend((screen_label, line))
 
         folder_label = ttk.Label(frame, text=t("win.folder"))
-        folder_label.grid(row=6, column=0, sticky="w", pady=3)
+        folder_label.grid(row=7, column=0, sticky="w", pady=3)
         folder_line = ttk.Frame(frame)
-        folder_line.grid(row=6, column=1, sticky="ew", pady=3)
+        folder_line.grid(row=7, column=1, sticky="ew", pady=3)
         self.folder_var = tk.StringVar(value=self.base_folder)
         self.folder_entry = ttk.Entry(folder_line, textvariable=self.folder_var, width=52)
         self.folder_entry.pack(side="left", fill="x", expand=True)
@@ -359,13 +390,13 @@ class App:
 
         self.advanced_button = ttk.Button(
             frame, text="▸  " + t("win.advanced"), command=self.toggle_advanced)
-        self.advanced_button.grid(row=4, column=0, columnspan=2, sticky="w", pady=(7, 2))
+        self.advanced_button.grid(row=5, column=0, columnspan=2, sticky="w", pady=(7, 2))
         for widget in self.advanced_widgets:
             widget.grid_remove()
 
         notice = tk.Frame(frame, background=C.warn_bg, highlightthickness=1, highlightbackground=C.warn_border,
                           padx=10, pady=7)
-        notice.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(14, 4))
+        notice.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(14, 4))
         if theme.ICON_FONT:
             tk.Label(notice, text="\ue7ba", font=(theme.ICON_FONT, 11), background=C.warn_bg,
                      foreground=C.warn_text).pack(side="left", padx=(0, 8))
@@ -374,7 +405,7 @@ class App:
         # Enabled once the model is loaded (and a translation model, if one is chosen).
         self.start_button = ttk.Button(frame, text=t("win.start"), style="Huge.Accent.TButton",
                                        command=self.start, state="disabled")
-        self.start_button.grid(row=8, column=0, columnspan=2, sticky="w", pady=(14, 2), ipadx=40)
+        self.start_button.grid(row=9, column=0, columnspan=2, sticky="w", pady=(14, 2), ipadx=40)
         return frame
 
     # --- home screen ------------------------------------------------------------------------------
@@ -470,6 +501,18 @@ class App:
         else:
             self.status.configure(text=t("win.loading"), foreground=GREY)
         self.start_probe()
+        self.root.after_idle(self.fit_height)
+
+    def fit_height(self) -> None:
+        """Makes the window tall enough for what it shows (the meeting settings grow with the
+        number of devices), never taller than the screen; a maximised window is left alone."""
+        if self.root.state() != "normal":
+            return
+        self.root.update_idletasks()
+        wanted = min(self.root.winfo_reqheight() + 10, self.root.winfo_screenheight() - 90)
+        if wanted > self.root.winfo_height():
+            top = max(0, min(self.root.winfo_y(), self.root.winfo_screenheight() - wanted - 60))
+            self.root.geometry(f"{self.root.winfo_width()}x{wanted}+{self.root.winfo_x()}+{top}")
 
     # --- recordings made elsewhere ----------------------------------------------------------------
 
@@ -670,7 +713,18 @@ class App:
                 "microphone": microphone if microphone in self.microphones else NO_MICROPHONE,
                 "translate": self.targets[self.translate_to.current()][0] or "",
                 "folder": self.folder_var.get().strip(),
-                "screen": str(self.screen_choice.current()) if self.screens else ""}
+                "screen": str(self.screen_choice.current()) if self.screens else "",
+                "mention": "1" if self.mention_on.get() else "0",
+                "mention_names": self.mention_names.get().strip(),
+                "mention_sound": "1" if self.mention_sound.get() else "0",
+                "mention_mic": "1" if self.mention_mic.get() else "0"}
+
+    def refresh_mention(self) -> None:
+        """The name field and the sound option only while the mention check is on."""
+        state = "normal" if self.mention_on.get() else "disabled"
+        self.mention_names.configure(state=state)
+        self.mention_sound_box.configure(state=state)
+        self.mention_mic_box.configure(state=state)
 
     def chosen_processing(self) -> dict:
         """The processing options, offered again next time (the same for meetings and files)."""
@@ -726,6 +780,21 @@ class App:
 
     def build_text(self) -> ttk.Frame:
         frame = ttk.Frame(self.root)
+        # "You were mentioned at 12:34 — Show": over the text for 15 seconds after a mention.
+        self.mention_banner = tk.Frame(frame, background=C.warn_bg, highlightthickness=1,
+                                       highlightbackground=C.warn_border, padx=10, pady=6)
+        if theme.ICON_FONT:
+            tk.Label(self.mention_banner, text=theme.glyph("bell"), font=(theme.ICON_FONT, 12),
+                     background=C.warn_bg, foreground=C.warn_text).pack(side="left", padx=(0, 8))
+        self.mention_banner_text = tk.Label(self.mention_banner, font=(FONT, 10, "bold"), background=C.warn_bg,
+                                            foreground=C.warn_text, anchor="w", justify="left", wraplength=640)
+        self.mention_banner_text.pack(side="left", fill="x", expand=True)
+        jump = tk.Label(self.mention_banner, text=t("win.mention_show"), font=(FONT, 10, "underline"),
+                        background=C.warn_bg, foreground=C.link, cursor="hand2")
+        jump.bind("<Button-1>", lambda _event: self.jump_to_mention(self.mention_banner_jump))
+        jump.pack(side="right")
+        self.mention_banner_jump = None
+        self.mention_banner_timer = None
         self.panes = ttk.PanedWindow(frame, orient="horizontal")
         self.panes.pack(fill="both", expand=True)
         left, self.text = self.text_column(self.panes, t("win.transcript_head"))
@@ -830,6 +899,11 @@ class App:
             text.tag_configure("me", foreground=C.link, font=(FONT, self.text_size, "bold"))
             text.tag_configure("others", foreground=GREEN, font=(FONT, self.text_size, "bold"))
             text.tag_configure("shot", foreground=C.link, underline=True, font=(FONT, max(8, self.text_size - 2)))
+            # Being addressed: the name on a yellow background, a bar left of the paragraph.
+            text.tag_configure("mention_para", lmargin1=10, lmargin2=10, lmargincolor=C.warn_border)
+            text.tag_configure("mention", background=C.warn_bg, foreground=C.warn_text,
+                               font=(FONT, self.text_size, "bold"))
+            text.tag_raise("mention")
             for number, colour in enumerate(VOICE_COLOURS):
                 text.tag_configure(f"voice{number}", foreground=colour, font=(FONT, self.text_size, "bold"))
 
@@ -863,6 +937,18 @@ class App:
         if entered_folder:
             self.base_folder = os.path.abspath(os.path.expanduser(entered_folder))
         self.save_ui_settings(self.chosen_settings())
+        if self.mention_on.get() and not mentions.names_from(self.mention_names.get()):
+            messagebox.showwarning(t("win.mention_label"), t("win.mention_empty"))
+            self.mention_names.focus_set()
+            self.start_probe()
+            return
+        self.mention = mentions.Matcher(self.mention_names.get() if self.mention_on.get() else "")
+        self.mention_list = []  # (seconds, label, paragraph) of each mention, for mentions.txt
+        self.mention_alerted = -1000.0  # when the last alert was given (time.monotonic)
+        self.mention_shown = -1  # the mention the counter jumped to last
+        hotwords = self.hotwords
+        if self.mention:  # rare names are recognised better when Whisper is told them
+            hotwords = ", ".join(part for part in (self.hotwords, ", ".join(self.mention.names)) if part)
         folder = os.path.join(self.base_folder, time.strftime("%Y-%m-%d %H-%M-%S"))
         original_folder = folder
         number = 2
@@ -871,7 +957,7 @@ class App:
             number += 1
         try:
             self.session = live.LiveSession(
-                self.model, folder, language, self.hotwords, microphone, speakers,
+                self.model, folder, language, hotwords, microphone, speakers,
                 on_final=lambda start, end, label, text: self.events.put(("final", (start, end, label, text))),
                 on_draft=lambda label, text: self.events.put(("draft", (label, text))),
                 on_levels=self.set_levels,
@@ -1032,7 +1118,83 @@ class App:
         else:
             self.append_final(" " + text, ())
         self.last_end, self.last_label = end, label
+        self.mark_mentions(start, label, text)
         self.render_drafts()
+
+    # --- being addressed (mentions.py) ----------------------------------------------------------------
+
+    def is_mine(self, label: str | None) -> bool:
+        return bool(label) and self.label_tag(label) == "me"
+
+    def checks(self, label: str | None) -> bool:
+        """Whether a phrase is checked for mentions: the other side always, your microphone only
+        with "also my microphone"."""
+        return bool(self.mention) and (not self.is_mine(label) or self.mention_mic.get())
+
+    def mark_mentions(self, start: float, label: str | None, text: str) -> None:
+        """Highlights the names in the text just added (it ends where the draft begins), marks the
+        paragraph, lists it and announces it. Your own words are not checked."""
+        spans = self.mention.spans(text) if self.checks(label) else []
+        if not spans:
+            return
+        begin = self.text.index(f"draft - {len(text)} chars")
+        for a, b in spans:
+            self.text.tag_add("mention", f"{begin} + {a} chars", f"{begin} + {b} chars")
+        self.text.tag_add("mention_para", f"{begin} linestart", f"{begin} lineend")
+        number = len(self.mention_list)
+        self.text.mark_set(f"mention{number}", f"{begin} linestart")
+        self.text.mark_gravity(f"mention{number}", "left")
+        self.mention_list.append((start, label, text))
+        self.update_mention_counter()
+        self.alert_mention(start, label, text, jump_to=number)
+
+    def check_draft_mention(self, label: str | None, text: str) -> None:
+        """The draft shows a phrase seconds after it is said, long before the final text: an
+        early alert, while the person is still waiting for an answer."""
+        if self.checks(label) and self.mention.spans(text):
+            self.alert_mention(self.session.seconds if self.session else 0, label, text, jump_to=None)
+
+    def alert_mention(self, seconds: float, label: str | None, text: str, jump_to: int | None) -> None:
+        """One alert per 45 seconds: the draft and then the final text of the same phrase (which
+        comes 20-30 seconds later), or a name said twice in a row, are one mention. The final text
+        of an alert already shown makes its "Show" lead there."""
+        now = time.monotonic()
+        if now - self.mention_alerted < 45:
+            if jump_to is not None and self.mention_banner_jump is None and self.mention_banner.winfo_manager():
+                self.mention_banner_jump = jump_to
+            return
+        self.mention_alerted = now
+        quote = text if len(text) <= 120 else "…" + text[-117:]
+        who = f"{label}: " if label else ""
+        message = t("win.mention_alert", time=tool.format_clock(seconds), quote=f"{who}{quote}")
+        self.mention_banner_text.configure(text=message)
+        self.mention_banner_jump = jump_to
+        if not self.mention_banner.winfo_manager():
+            self.mention_banner.pack(fill="x", pady=(0, 6), before=self.panes)
+        if self.mention_banner_timer:
+            self.root.after_cancel(self.mention_banner_timer)
+        self.mention_banner_timer = self.root.after(15000, self.mention_banner.pack_forget)
+        if self.mention_sound.get():
+            play_alert_sound(self.root)
+        notify(self.root, t("win.mention_title"), message, None)  # only when the window is not in front
+
+    def update_mention_counter(self) -> None:
+        count = len(self.mention_list)
+        self.mention_counter.configure(text=(theme.glyph("bell") + "  " if theme.ICON_FONT else "") +
+                                       t("win.mention_count", n=count))
+        if count and not self.mention_counter.winfo_manager():
+            self.mention_counter.pack(side="left")
+
+    def jump_to_mention(self, number: int | None = None) -> None:
+        """Shows a mention in the text: the given one, or the next one after the last shown."""
+        if not self.mention_list:
+            self.scroll_to_end()
+            return
+        if number is None:
+            number = (self.mention_shown + 1) % len(self.mention_list)
+        self.mention_shown = number
+        self.text.see(f"mention{number}")
+        self.mention_banner.pack_forget()
 
     def add_translation(self, start: float, label: str | None, text: str, new_paragraph: bool, tag) -> None:
         """A translated phrase in the second column, in the paragraphs of the original."""
@@ -1045,6 +1207,10 @@ class App:
             widget.insert("end-1c", gap, (), f"[{tool.format_clock(start)}]  ", ("time",), *name, text, ())
         else:
             widget.insert("end-1c", " " + text)
+        if self.checks(label):
+            begin = widget.index(f"end-1c - {len(text)} chars")
+            for a, b in self.mention.spans(text):
+                widget.tag_add("mention", f"{begin} + {a} chars", f"{begin} + {b} chars")
         widget.configure(state="disabled")
         if follow:
             widget.see("end")
@@ -1068,6 +1234,7 @@ class App:
 
     def set_draft(self, label: str | None, text: str) -> None:
         self.drafts[label] = text.rstrip(" .…")
+        self.check_draft_mention(label, text)
         self.render_drafts()
 
     def render_drafts(self) -> None:
@@ -1141,6 +1308,14 @@ class App:
             self.model = self.session.model = None
             folder = os.path.dirname(self.session.wav_path)
             add_recent("live", os.path.basename(folder), folder)
+            if getattr(self, "mention_list", None):
+                try:
+                    mentions.write_list(os.path.join(folder, "mentions.txt"), self.mention_list,
+                                        self.mention.names, tool.format_clock)
+                except OSError as error:
+                    print(f"mentions.txt not written: {error}", flush=True)
+            self.mention_counter.pack_forget()
+            self.mention_banner.pack_forget()
         self.timer.configure(text="")
         gc.collect()
 
@@ -1486,6 +1661,8 @@ class App:
             argv = [self.session.txt_path, "--force"]
         if self.summary.get():
             argv.append("--summary")
+            if self.files is None and getattr(self, "mention", None):
+                argv += ["--about-me", ", ".join(self.mention.names)]
         if self.translate.get():
             argv += ["--translate", self.after_targets[self.after_target.current()][0]]
             if self.check_translation.get():
@@ -1851,7 +2028,8 @@ class App:
                           (f"meeting.{code}.txt", "win.translation"),
                           (f"meeting.live.{code}.checked.txt", "win.checked_translation"),
                           (f"meeting.live.{code}.txt", "win.translation")]
-            names += [("meeting.summary.md", "win.summary_file"), ("meeting.live.summary.md", "win.summary_file")]
+            names += [("meeting.summary.md", "win.summary_file"), ("meeting.live.summary.md", "win.summary_file"),
+                      ("mentions.txt", "win.mentions_file")]
             found, shown = [], []
             for name, key in names:
                 path = os.path.join(folder, name)
@@ -2346,6 +2524,20 @@ TOAST_SCRIPT = (
 APP_ID = "transcribe.live"
 
 
+# PowerShell's own app ID, registered on every Windows: used when this app's is not.
+POWERSHELL_APP_ID = r"{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe"
+
+
+def toast_app_id() -> str:
+    """Windows shows a notification only for an app ID that a Start menu shortcut carries. The
+    installer's shortcuts carry APP_ID; a run from the source folder has none, so its
+    notifications are shown on behalf of PowerShell."""
+    installed = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Live Transcription")
+    if os.path.normcase(os.path.abspath(sys.executable)).startswith(os.path.normcase(installed)):
+        return APP_ID
+    return POWERSHELL_APP_ID
+
+
 def notify(root: tk.Tk, title: str, message: str, target: str | None) -> None:
     """Tells that a long processing has ended when the window is not in front: the taskbar button
     flashes and a system notification shows. Nothing when the window is in use."""
@@ -2370,7 +2562,7 @@ def notify(root: tk.Tk, title: str, message: str, target: str | None) -> None:
                       if target and os.path.exists(target) else "")
             xml = (f"<toast{launch}><visual><binding template=\"ToastGeneric\"><text>{escape(title)}</text>"
                    f"<text>{escape(message)}</text></binding></visual></toast>")
-            env = dict(os.environ, LIVE_TRANSCRIPTION_TOAST=xml, LIVE_TRANSCRIPTION_APP_ID=APP_ID)
+            env = dict(os.environ, LIVE_TRANSCRIPTION_TOAST=xml, LIVE_TRANSCRIPTION_APP_ID=toast_app_id())
             subprocess.Popen(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", TOAST_SCRIPT],
                              env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                              creationflags=subprocess.CREATE_NO_WINDOW)
@@ -2385,6 +2577,52 @@ def notify(root: tk.Tk, title: str, message: str, target: str | None) -> None:
             root.bell()
     except Exception as error:  # only a convenience
         print(f"Notification not shown: {error}", flush=True)
+
+
+ALERT_SOUND = paths.config("mention-alert.local.wav")  # made on first use, not in git
+
+
+def make_alert_sound(path: str) -> None:
+    """The app's own alert: two bright chimes going up (C6, G6) with a bell-like decay, played
+    twice, about 1.3 seconds, near full volume. Made once instead of shipping a sound file."""
+    import wave
+    import numpy as np
+    rate = 44100
+
+    def chime(frequency: float, seconds: float):
+        time_axis = np.arange(int(rate * seconds)) / rate
+        tone = (np.sin(2 * np.pi * frequency * time_axis) + 0.35 * np.sin(2 * np.pi * 2 * frequency * time_axis)
+                + 0.15 * np.sin(2 * np.pi * 3 * frequency * time_axis))
+        envelope = np.minimum(1, time_axis / 0.005) * np.exp(-time_axis * 6)
+        return tone * envelope
+
+    gap = np.zeros(int(rate * 0.06))
+    pair = np.concatenate([chime(1046.5, 0.22), gap, chime(1568.0, 0.36)])
+    sound = np.concatenate([pair, np.zeros(int(rate * 0.12)), pair])
+    sound = (sound / np.abs(sound).max() * 0.9 * 32767).astype(np.int16)
+    with wave.open(path, "wb") as out:
+        out.setnchannels(1)
+        out.setsampwidth(2)
+        out.setframerate(rate)
+        out.writeframes(sound.tobytes())
+
+
+def play_alert_sound(root) -> None:
+    """The alert sound for a mention, clearly audible during a call (the system's notification
+    sounds are often quiet). It plays on the default output, so also in a headset."""
+    try:
+        if not os.path.isfile(ALERT_SOUND):
+            make_alert_sound(ALERT_SOUND)
+        if os.name == "nt":
+            import winsound
+            winsound.PlaySound(ALERT_SOUND, winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
+        elif sys.platform == "darwin":
+            subprocess.Popen(["afplay", ALERT_SOUND])
+        else:
+            root.bell()
+    except Exception as error:  # a sound is only an extra
+        print(f"Alert sound not played: {error}", flush=True)
+        root.bell()
 
 
 def clock_seconds(clock: str) -> float:

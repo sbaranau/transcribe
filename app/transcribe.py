@@ -708,6 +708,12 @@ def summarize(txt_path: str, args, summary_path: str | None = None) -> bool:
     engine, location = args.ai_engine, args.ai_location
     with open(SUMMARY_PROMPT_FILE, encoding="utf-8") as prompt_file:
         prompt = prompt_file.read()
+    if getattr(args, "about_me", None):
+        # The person who asked for the summary wants what concerns them at a glance.
+        prompt += ("\n\nAdditionally, end the summary with a section headed (in the language of the "
+                   "summary) \"What concerns you\". The reader is called: " + args.about_me + ". List "
+                   "every question, request, task or decision addressed to this person or naming them, "
+                   "each with its time stamp and who said it. If there is none, say so in one line.")
     with open(txt_path, encoding="utf-8") as transcript_file:
         transcript = transcript_file.read()
 
@@ -957,6 +963,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--summary", action="store_true",
                         help="also write <name>.summary.md with an AI (sends the transcript to it, "
                              "unless it is a local model); made from the checked text if there is one")
+    parser.add_argument("--about-me", default=None, metavar="NAMES",
+                        help="with --summary: the names you are called by (comma separated); the "
+                             "summary ends with what concerns you")
     parser.add_argument("--ai", choices=ai_engines.ENGINES, default=None,
                         help="AI for the check and the summary: claude (Claude Code), codex (ChatGPT "
                              "via Codex CLI), gemini (Gemini CLI), copilot (GitHub Copilot CLI), qwen "
