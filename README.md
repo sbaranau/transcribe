@@ -13,7 +13,7 @@ remains available for developers. See the
 [All releases](https://github.com/sbaranau/transcribe/releases/latest) ·
 [User guide in Russian](ИНСТРУКЦИЯ.md)
 
-![The home screen: a dark blue app bar, two equal choices, Meeting now and Existing recording, each with a blue button, the recent results, and the version and copyright at the bottom](docs/screenshots/1-home.png)
+![The home screen: a dark blue app bar, two equal choices, Meeting now and Existing recording, each with a blue button, the recent results as rows with their date, and the version and copyright at the bottom](docs/screenshots/1-home.png)
 
 ## What it does
 
@@ -148,17 +148,24 @@ The live workflow has five explicit states: preparation, translation-model downl
 finishing the last phrases, and creating results. The folder can be edited or chosen with the
 system dialog; less-used options stay under **Additional settings**. During recording, drafts are
 shown separately from confirmed text and the translation column can be hidden temporarily.
-Before the start, level bars show that the microphone and the computer sound are heard.
+Before the start, level bars show that the microphone and the computer sound are heard, and
+you can enter the names you are called by, to be told when somebody addresses you.
 
-![Meeting now on Windows: Back, meeting language, translation into German with its model ready, the microphone and computer sound with their level bars, and the blue Start recording button](docs/screenshots/2-before.png)
+![Meeting now on Windows: Back and the Ready to record state, meeting language, translation into German with its model ready, the microphone and computer sound with their level bars, Mentions of me with the names Alex and Alexander and the sound option, and the blue Start recording button](docs/screenshots/2-before.png)
+
+During the meeting, a mention of your name is highlighted, counted and announced a few seconds
+after it is said: a banner with **Show**, a chime, and a system notification when the window is in
+the background.
+
+![A meeting in progress on Windows: the timer and Recording, the counter Mentions: 1, a yellow banner "You were mentioned (00:24:40): Speaker 2: Alex, can you check the screenshots for the documentation by Friday?" with Show, and the transcript with Alex highlighted and a bar beside that paragraph](docs/screenshots/5-mention.png)
 
 The processing shows its steps while it runs; the full log is under **Details**. When it ends,
 the results come first, and the taskbar button flashes with a notification if the window is in
 the background.
 
 <p>
-<img src="docs/screenshots/3-processing.png" alt="Transcribing a recording on Windows: Stop processing, and the steps Transcription and Speakers running, Translation into German waiting" width="49%">
-<img src="docs/screenshots/4-results.png" alt="The same recording done in 1 minute: a green panel with the blue Open text button, Open translation, Open folder, Change the settings and run again, and Details" width="49%">
+<img src="docs/screenshots/3-processing.png" alt="Transcribing a recording on Windows: the Processing state, Stop processing, and the steps with icons: Transcription running, Speakers and Translation into German waiting" width="49%">
+<img src="docs/screenshots/4-results.png" alt="The same recording done in 1 minute: the Done state, the blue Open text button with Open translation and Open folder beside it, then Change the settings and run again, and Details" width="49%">
 </p>
 
 The results of a recording go into a folder next to it:
