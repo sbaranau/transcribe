@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.38 — 2026-11-23
+
+- The "also my microphone" option has a shorter text that fits the window in every language.
+- README: new screenshots of the current design, including a meeting with a mention.
+
 ## v1.37 — 2026-11-23
 
 - Mentions: before a meeting you can tick "Tell me when I am named or addressed" and enter the
